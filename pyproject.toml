@@ -1,0 +1,39 @@
+[project]
+name = "pytred"
+dynamic = ["version"]
+description = "Add your description here"
+authors = [
+    { name = "Shinichi Kanehira", email = "skanehir1126@gmail.com" }
+]
+dependencies = [
+    "pandas>=2.0",
+    "polars>=0.20",
+    "numpy",
+    "typing-extensions>=4.10",
+]
+readme = "README.md"
+requires-python = ">= 3.9"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/pytred/__init__.py"
+
+[tool.rye]
+managed = true
+dev-dependencies = [
+    "mkdocs>=1.5.3",
+    "pytest>=8.1.1",
+    "tox>=4.14.1",
+]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.mypy]
+exclude = [
+    'tests'
+]
+
