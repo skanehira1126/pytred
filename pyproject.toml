@@ -15,8 +15,8 @@ readme = "README.md"
 requires-python = ">= 3.9"
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
 
 [tool.hatch.version]
 path = "src/pytred/__init__.py"
