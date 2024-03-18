@@ -17,14 +17,15 @@ def table(
     """
     Parameters
     ----------
-    engine : Literal["polars"]
+    engine : {"polars"}
         The backend engine used for data processing. Currently, only "polars" is supported.
     order : int
         An integer specifying the execution order of the data processing function.
     keys : str
         The names of the key columns used to join data tables.
-    join : str | None, optional
-        The type of join to use when combining data tables. If None, it implies that no join is applied.
+    join : str, optional
+        The type of join to use when combining data tables.
+        If None, it implies that no join is applied.
     is_validate_unique : bool, default False
         Whether to validate the uniqueness of the specified keys. If True, checks for
         duplicate entries based on the keys.
@@ -32,13 +33,9 @@ def table(
 
     if engine == "polars":
         if check_polars_join_keys(join):
-            return polars_table(
-                order, *keys, join=join, is_validate_unique=is_validate_unique
-            )
+            return polars_table(order, *keys, join=join, is_validate_unique=is_validate_unique)
         else:
-            raise ValueError(
-                "join must be 'inner', 'left', 'outer', 'semi', 'anti' or 'cross'."
-            )
+            raise ValueError("join must be 'inner', 'left', 'outer', 'semi', 'anti' or 'cross'.")
     else:
         raise ValueError("engine must be 'polars only'.")
 
@@ -51,13 +48,13 @@ def check_polars_join_keys(
 
     Parameters
     ----------
-    join : str | None
+    join : str
         The join method to validate, which can be "inner", "left", "outer", "semi",
         "anti", "cross", or None.
 
     Returns
     -------
-    TypeGuard[Literal["inner", "left", "outer", "semi", "anti", "cross"] | None]
+    bool
         Returns True if the join method is valid; otherwise, returns False.
     """
     if join in ["inner", "left", "outer", "semi", "anti", "cross"] or join is None:
