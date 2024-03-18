@@ -1,7 +1,7 @@
 import polars as pl
 
 from pytred import DataHub, DataNode
-from pytred.annotations import polars_table
+from pytred.decorators import polars_table
 
 
 class BasicDataHub(DataHub):
