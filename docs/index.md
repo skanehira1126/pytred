@@ -1,5 +1,4 @@
-# pytred
-Python Tools for Refinement and Enhancement of Data
+# Welcome to Pytred Documentation
 
 ## Introduction
 

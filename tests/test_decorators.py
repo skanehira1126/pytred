@@ -2,7 +2,7 @@ import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
 
-from pytred.annotations import polars_table
+from pytred.decorators import polars_table
 from pytred.exceptions import DuplicatedError, InvalidReturnValueError
 
 
