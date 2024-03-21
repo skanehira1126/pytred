@@ -120,3 +120,10 @@ class TestPolarsTable:
 
         assert prep_function.table_process_order == expected[0]
         assert prep_function.join == expected[2]
+
+    def test__raise_ValueError_order_is_less_than_0(self, simple_df):
+        with pytest.raises(ValueError):
+
+            @polars_table(-1, "id")
+            def prep_function():
+                return simple_df

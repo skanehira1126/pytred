@@ -37,10 +37,11 @@ def polars_table(
     ValueError
         If the 'order' parameter is not an integer.
     """
-    if isinstance(order, int):
-        order = order
-    else:
+    if not isinstance(order, int):
         raise ValueError("order must be int.")
+    if isinstance(order, int) and order < 0:
+        # -1 is used by DataHub
+        raise ValueError("order must be more than 0.")
 
     def decorator(func: Callable[..., pl.DataFrame]) -> Callable:
         """
