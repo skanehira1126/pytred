@@ -90,3 +90,36 @@ class InvalidDataHubNotReturnDataFrame(DataHub):
     @polars_table(0, "id", join="left")
     def test(self):
         return self.invalid_function_reutrn_value
+
+
+class ComplecatedDataHub(DataHub):
+    """
+    This is example of visualizing data processing flow
+    """
+
+    @polars_table(0, None, join=None)
+    def table1_1(self, input_table): ...
+
+    @polars_table(0, None, join=None)
+    def table1_2(self, input_table): ...
+
+    @polars_table(0, None, join=None)
+    def table1_3(self): ...
+
+    @polars_table(0, None, join=None)
+    def table1_4(self): ...
+
+    @polars_table(1, None, join=None)
+    def table2_1(self, input_table, table1_1): ...
+
+    @polars_table(1, None, join=None)
+    def table2_2(self, table1_1, table1_2): ...
+
+    @polars_table(1, None, join=None)
+    def table2_3(self, input_table, table1_3): ...
+
+    @polars_table(1, None, join=None)
+    def table2_4(self, table1_3): ...
+
+    @polars_table(2, None, join=None)
+    def table3(self, table1_4, table2_3, table2_4): ...

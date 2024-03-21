@@ -10,7 +10,7 @@ from typing import Callable
 import numpy as np
 import polars as pl
 
-from pytred.data_node import DataNode
+from pytred.data_node import DataNode, ProcessingNode
 
 logger = getLogger(__name__)
 
@@ -19,6 +19,7 @@ class DataHub:
     tables: dict[str, DataNode]
     table_functions: OrderedDict[str, Callable] | None = None
     table_join_info: dict[str, str] | None = None
+    table_order: dict[str, int] | None = None
 
     def __init__(
         self,
@@ -59,12 +60,19 @@ class DataHub:
                     raise TypeError(
                         f"named_tables must be pl.DataFrame, not {type(df)}."
                     )
+
         self.tables = {}
+        # If no superclass is specified, default to None and create an empty dictionary.
+        if self.table_order is None:
+            self.table_order = {}
+
         for data_node in input_tables:
             if data_node.name in self.tables.keys():
                 raise ValueError(f"{data_node.name} is duplicated.")
 
             self.tables[data_node.name] = data_node
+
+            self.table_order.update({name: -1 for name in self.tables.keys()})
 
     def __init_subclass__(cls, **kwargs):
         """
@@ -72,16 +80,17 @@ class DataHub:
         """
         super().__init_subclass__(**kwargs)
         # get anotatted functions
-        tables, table_join_info, sort_index = cls._get_annotations()
+        tables, table_join_info, table_order = cls._get_annotations()
 
         # sort tables
         if len(tables):
-            cls.table_functions = OrderedDict(tables[sort_index])
+            cls.table_functions = OrderedDict(tables)
             cls.table_join_info = table_join_info
+            cls.table_order = table_order
         cls.tables = {}
 
     @classmethod
-    def _get_annotations(cls) -> tuple[np.ndarray, dict, np.ndarray]:
+    def _get_annotations(cls) -> tuple[np.ndarray, dict, dict]:
         """
         Collects and organizes information from annotated functions within the class.
         It extracts the function names, their associated join methods, and their execution order.
@@ -95,10 +104,11 @@ class DataHub:
             A tuple containing three elements:
             - An array of function and , each containing the name and reference to an annotated function.
             - A dictionary mapping each function name to its specified join method.
-            - An array of indices representing the sorted execution order of the functions.
+            - A dictionary mapping each function name to its executing order
         """
         tables = []
         table_join_info = {}
+        table_order = {}
         order = []
         for member in inspect.getmembers(cls):
             function_name = member[0]
@@ -107,10 +117,11 @@ class DataHub:
             if hasattr(function, "table_process_order"):
                 tables.append([function_name, function])
                 table_join_info[function_name] = function.join
+                table_order[function_name] = function.table_process_order
                 order.append(function.table_process_order)
 
         sort_index = np.argsort(order)
-        return np.array(tables), table_join_info, sort_index
+        return np.array(tables)[sort_index], table_join_info, table_order
 
     def __call__(self, *filters: pl.Expr) -> pl.DataFrame:
         """
@@ -184,28 +195,65 @@ class DataHub:
             )
         return df
 
-    def create_tables(self):
-        """
-        Creates tables based on the annotated functions and their execution order.
-        """
-        for name, function in self.table_functions.items():
+    def correct_table_and_arguments(self):
+
+        for name, order in sorted(self.table_order.items(), key=lambda x: x[1]):
+            if order == -1:
+                continue
+            function = self.table_functions[name]
             # get function arguments to check input tables
             sig = inspect.signature(function)
 
             # Read arguments annotated with table information, executing past tables as arguments
             # Skip the first argument if it's declared as self or cls
-            arg_tables = []
+            arg_table_names = []
             for idx, arg_name in enumerate(sig.parameters.keys(), 1):
                 if idx == 1 and (arg_name == "self" or arg_name == "cls"):
                     continue
                 else:
-                    arg_tables.append(self.get(arg_name).table)
+                    arg_table_names.append(arg_name)
 
-            # set generated tables
-            table, keys = function(self, *arg_tables)
+            yield order, name, function, arg_table_names
+
+    def create_tables(self):
+        """
+        Creates tables based on the annotated functions and their execution order.
+        """
+        for _, name, function, arg_table_names in self.correct_table_and_arguments():
+            # execute processing function
+            table, keys = function(
+                self, *[self.get(table_name).table for table_name in arg_table_names]
+            )
             self.tables[name] = DataNode(
                 table, keys, join=self.table_join_info[name], name=name
             )
+
+    def search_tables(self):
+        """
+        Creates tables based on the annotated functions and their execution order.
+        """
+        from pytred.data_node import ProcessingNode
+
+        logger.info("Start travarsing data processing flow...")
+        processing_nodes = [
+            ProcessingNode(name, level=order)
+            for name, order in self.table_order.items()
+            if order == -1
+        ]
+        for order, name, _, arg_table_names in self.correct_table_and_arguments():
+            # get function arguments to check input tables
+            logger.info(f"target table name: {name}")
+            node = ProcessingNode(name, level=order)
+
+            for table_name in arg_table_names:
+                for parent_node in processing_nodes:
+                    if parent_node.name == table_name:
+                        parent_node.add_child(node)
+
+            processing_nodes.append(node)
+
+        logger.info("... Finished")
+        return processing_nodes
 
     def post_step(self, df: pl.DataFrame) -> pl.DataFrame:
         """

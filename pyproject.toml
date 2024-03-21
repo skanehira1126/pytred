@@ -11,10 +11,14 @@ dependencies = [
     "numpy",
     "typing-extensions>=4.10",
     "pyarrow>=15.0.1",
-    "mkdocs-jupyter>=0.24.6",
 ]
 readme = "README.md"
 requires-python = ">= 3.9"
+
+[project.optional-dependencies]
+visualize = [
+    "graphviz>=0.20.2",
+]
 
 [build-system]
 requires = ["flit_core >=3.2,<4"]
@@ -34,6 +38,8 @@ dev-dependencies = [
     "mkdocstrings>=0.24.1",
     "mkdocs-material>=9.5.14",
     "mkdocstrings-python>=1.9.0",
+    "graphviz>=0.20.2",
+    "mkdocs-jupyter>=0.24.6",
 ]
 
 [tool.hatch.metadata]
@@ -43,4 +49,6 @@ allow-direct-references = true
 exclude = [
     'tests'
 ]
+ignore_missing_imports = true
+
 
