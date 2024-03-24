@@ -10,7 +10,7 @@ from typing import Callable
 import numpy as np
 import polars as pl
 
-from pytred.data_node import DataNode, ProcessingNode
+from pytred.data_node import DataNode
 
 logger = getLogger(__name__)
 
@@ -228,22 +228,28 @@ class DataHub:
                 table, keys, join=self.table_join_info[name], name=name
             )
 
-    def search_tables(self):
+    def search_tables(self) -> list:
         """
         Creates tables based on the annotated functions and their execution order.
-        """
-        from pytred.data_node import ProcessingNode
 
-        logger.info("Start travarsing data processing flow...")
-        processing_nodes = [
-            ProcessingNode(name, level=order)
-            for name, order in self.table_order.items()
-            if order == -1
-        ]
+        Returns
+        -------
+        list of DataflowNode
+        """
+        from pytred.data_node import DataflowNode
+
+        if self.table_order is None or len(self.table_order) == 0:
+            processing_nodes = []
+        else:
+            processing_nodes = [
+                DataflowNode(name, level=order)
+                for name, order in self.table_order.items()
+                if order == -1
+            ]
         for order, name, _, arg_table_names in self.correct_table_and_arguments():
             # get function arguments to check input tables
             logger.info(f"target table name: {name}")
-            node = ProcessingNode(name, level=order)
+            node = DataflowNode(name, level=order)
 
             for table_name in arg_table_names:
                 for parent_node in processing_nodes:
@@ -252,7 +258,6 @@ class DataHub:
 
             processing_nodes.append(node)
 
-        logger.info("... Finished")
         return processing_nodes
 
     def post_step(self, df: pl.DataFrame) -> pl.DataFrame:

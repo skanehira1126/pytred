@@ -2,7 +2,7 @@ import polars as pl
 import pytest
 
 from pytred import DataHub, DataNode
-from pytred.helpers.visualize import ProcessingNode
+from pytred.data_node import DataflowNode
 
 
 def test__initialize():
@@ -169,13 +169,13 @@ def test__search_table(complecated_data_hub):
     actual = complecated_data_hub.search_tables()
 
     expected = (
-        [ProcessingNode("input_table", level=-1)]
-        + [ProcessingNode(f"table1_{cnt}", level=0) for cnt in range(1, 5)]
-        + [ProcessingNode(f"table2_{cnt}", level=1) for cnt in range(1, 5)]
-        + [ProcessingNode("table3", level=2)]
+        [DataflowNode("input_table", level=-1)]
+        + [DataflowNode(f"table1_{cnt}", level=0) for cnt in range(1, 5)]
+        + [DataflowNode(f"table2_{cnt}", level=1) for cnt in range(1, 5)]
+        + [DataflowNode("table3", level=2)]
     )
 
-    # add childs
+    # add children
     expected[0].add_child(expected[1])
     expected[0].add_child(expected[2])
     expected[0].add_child(expected[5])
