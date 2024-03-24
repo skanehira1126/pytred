@@ -15,7 +15,7 @@ class DataNode:
 
 
 @dataclass
-class ProcessingNode:
+class DataflowNode:
     """
     A node in a processing graph representing a data preprocessing step.
 
@@ -26,15 +26,37 @@ class ProcessingNode:
     level : int
         The hierarchical level of this node in the processing graph.
         Root level is indicated by 0, with higher numbers indicating deeper levels.
-    children : list of ProcessingNode
+    parents: list of DataflowNode
+        A list of parents nodes that depend on this node's inputs.
+    children : list of DataflowNode
         A list of child nodes that depend on this node's output.
     """
 
     name: str
     level: int
-    children: list[ProcessingNode] = field(default_factory=list)
+    parents: list[DataflowNode] = field(default_factory=list)
+    children: list[DataflowNode] = field(default_factory=list)
+    shape: str = "[]"
 
-    def add_child(self, child: ProcessingNode):
+    def __eq__(self, other):
+        return (
+            (self.name == other.name)
+            & (self.level == other.level)
+            & (self.shape == other.shape)
+            & (
+                sorted([p.name for p in self.parents])
+                == sorted([p.name for p in other.parents])
+            )
+            & (
+                sorted([c.name for c in self.children])
+                == sorted([c.name for c in other.children])
+            )
+        )
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def add_child(self, child: DataflowNode):
         """
         Adds a child node to the list of this node's children, representing a
         processing step that directly depends on the output of this node.
@@ -44,9 +66,10 @@ class ProcessingNode:
         child : ProcessingNode
             The child node to be added.
         """
+        child.parents.append(self)
         self.children.append(child)
 
-    def __str__(self) -> str:
+    def fmt_mermaid(self) -> str:
         """
         Returns a string representation of the processing node, including its
         name, level, and a visual hierarchy of its children.
@@ -56,7 +79,16 @@ class ProcessingNode:
         str
             A string representation of the node.
         """
-        ret = "\t" * self.level + repr(self.name) + "\n"
-        for child in self.children:
-            ret += child.__str__()
-        return ret
+        shape_open = self.shape[: len(self.shape) // 2]
+        shape_close = self.shape[len(self.shape) // 2 :]
+        return f"{self.name}{shape_open}{self.name}{shape_close}"
+
+
+@dataclass
+class DataEdge:
+    source: str
+    target: str
+    link_type: str
+
+    def fmt_mermaid(self):
+        return f"{self.source} {self.link_type} {self.target}"

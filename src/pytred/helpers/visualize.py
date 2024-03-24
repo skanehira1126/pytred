@@ -1,12 +1,41 @@
 from __future__ import annotations
 
-from graphviz import Digraph
+import pathlib
+import subprocess
+import tempfile
+from dataclasses import dataclass, field
+from typing import Literal
 
 from pytred.data_hub import DataHub
-from pytred.data_node import ProcessingNode
+from pytred.data_node import DataEdge, DataflowNode
 
 
-def make_dataflow_graph_from_datahub(data_hub: DataHub) -> Digraph:
+@dataclass
+class DataflowGraph:
+    nodes: list[DataflowNode] = field(default_factory=list)
+    edges: list[DataEdge] = field(default_factory=list)
+    graph_direction: Literal["LR", "TD"] = "TD"
+
+    def add_node(self, node: DataflowNode):
+        self.nodes.append(node)
+
+    def add_edge(self, edge: DataEdge):
+        self.edges.append(edge)
+
+    def __str__(self):
+        graph_str = f"graph {self.graph_direction}\n"
+        for node in self.nodes:
+            graph_str += f"    {node.fmt_mermaid()}\n"
+        for edge in self.edges:
+            graph_str += f"    {edge.fmt_mermaid()}\n"
+        return graph_str
+
+
+def make_dataflow_graph_from_datahub(
+    data_hub: DataHub,
+    output: str | pathlib.Path = "./dataflow.png",
+    direction: Literal["TD", "LR"] = "TD",
+):
     """
     Visualize the hierarchical structure of data preprocessing nodes from DataHub.
 
@@ -14,18 +43,27 @@ def make_dataflow_graph_from_datahub(data_hub: DataHub) -> Digraph:
     ----------
     data_hub: DataHub
         visualizing dataflow of this DataHub
+    output: str | pathlib.Path
+        file path of dataflow image
+    direction: {'TD', 'LR'}, default 'TD'
+        graph direction
 
-    Returns
-    -------
-    Digraph
-        A Graphviz Digraph object that can be rendered to visualize the tree structure.
     """
     nodes = data_hub.search_tables()
 
-    return make_dataflow_graph(nodes)
+    graph = make_dataflow_graph(nodes, direction)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        file_path = pathlib.Path(tmpdir, "temp.mmd")
+        with file_path.open("w") as f:
+            f.write(str(graph))
+
+        subprocess.run(["mmdc", "-i", file_path.as_posix(), "-o", str(output)])
 
 
-def make_dataflow_graph(nodes: list[ProcessingNode]) -> Digraph:
+def make_dataflow_graph(
+    nodes: list[DataflowNode], direction: Literal["TD", "LR"] = "TD"
+) -> DataflowGraph:
     """
     Visualize the hierarchical structure of data preprocessing nodes.
 
@@ -35,34 +73,43 @@ def make_dataflow_graph(nodes: list[ProcessingNode]) -> Digraph:
 
     Parameters
     ----------
-    nodes: list of ProcessingNode
-        A list of processing nodes, each with a name, level, and children.
+    nodes: list of DataflowNode
+        A list of dataflow nodes, each with a name, level, and children.
+    direction: {'TD', 'LR'}, default 'TD'
+        graph direction
 
     Returns
     -------
-    Digraph
-        A Graphviz Digraph object that can be rendered to visualize the tree structure.
+    DataflowGraph
+        A DataflowGraph object that can be rendered to visualize the tree structure.
     """
 
-    graph = Digraph()
-    # Configure the graph to flow from left to right
-    graph.attr(rankdir="LR")
+    graph = DataflowGraph(graph_direction=direction)
 
-    # Set for tracking nodes that are already added to the graph
-    added_nodes = set()
+    level_map: dict[int, list[DataflowNode]] = {}
+    for _node in sorted(nodes, key=lambda x: x.level):
 
-    # Add nodes to the graph level by level, group nodes of the same level
-    for level in sorted({node.level for node in nodes}):
-        with graph.subgraph() as s:
-            s.attr(rank="same")
-            for node in filter(lambda node: node.level == level, nodes):
-                if node.name not in added_nodes:
-                    s.node(node.name)
-                    added_nodes.add(node.name)
+        # for manegement of node position
+        if _node.level not in level_map.keys():
+            level_map[_node.level] = []
+        level_map[_node.level].append(_node)
 
-    # Iterate through all nodes to add edges to their children
-    for node in nodes:
-        for child in node.children:
-            graph.edge(node.name, child.name)
+        # add edge
+        for _child_node in _node.children:
+            level_diff = abs(_node.level - _child_node.level)
+            link_type = "-" * level_diff + "->"
+            edge = DataEdge(_node.name, _child_node.name, link_type=link_type)
+            graph.add_edge(edge)
+
+        # if node does not parents, make invisible edge
+        if len(_node.parents) == 0 and _node.level >= 0:
+            invisible_edge = DataEdge(
+                level_map[_node.level - 1][0].name,
+                _node.name,
+                link_type="~~~",
+            )
+            graph.add_edge(invisible_edge)
+
+        graph.add_node(_node)
 
     return graph
