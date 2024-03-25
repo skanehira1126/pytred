@@ -169,10 +169,10 @@ def test__search_table(complecated_data_hub):
     actual = complecated_data_hub.search_tables()
 
     expected = (
-        [DataflowNode("input_table", level=-1)]
+        [DataflowNode("input_table", level=-1, shape="[()]")]
         + [DataflowNode(f"table1_{cnt}", level=0) for cnt in range(1, 5)]
         + [DataflowNode(f"table2_{cnt}", level=1) for cnt in range(1, 5)]
-        + [DataflowNode("table3", level=2)]
+        + [DataflowNode("table3", level=2, shape="[[]]")]
     )
 
     # add children

@@ -121,5 +121,5 @@ class ComplecatedDataHub(DataHub):
     @polars_table(1, None, join=None)
     def table2_4(self, table1_3): ...
 
-    @polars_table(2, None, join=None)
+    @polars_table(2, None, join="left")
     def table3(self, table1_4, table2_3, table2_4): ...
