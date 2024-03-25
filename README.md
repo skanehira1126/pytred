@@ -15,4 +15,5 @@ Iht facilitates a structured approach to data operations, allowing each function
 
 1. [basic preprocessing](./examples/01_basic_preprocessing.ipynb)
 1. [Preprocessing with completed data](./examples/02_use_completed_data.ipynb)
+1. [visualize workflow](./examples/03_visualize_workflow.ipynb)
 

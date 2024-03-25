@@ -23,6 +23,11 @@ jobs:
     - uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
+    - name: Use Node.js
+      # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
+      uses: actions/setup-node@v3
+      with:
+        node-version: 21.x
     - name: Install Rye
       uses: baptiste0928/cargo-install@v2
       with:
@@ -34,6 +39,9 @@ jobs:
         rye config --set-bool behavior.use-uv=true
         rye sync
         rye install tox-gh-actions
+    - name: Install mermaid
+      run: |
+          npm install -g @mermaid-js/mermaid-cli
     - name: Test with tox
       run: rye run tox -e py${{ matrix.python-version }}
     - name: Test with tox linter
