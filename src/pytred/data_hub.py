@@ -17,7 +17,7 @@ logger = getLogger(__name__)
 
 class DataHub:
     tables: dict[str, DataNode]
-    table_functions: OrderedDict[str, Callable] | None = None
+    table_functions: dict[str, Callable] | None = None
     table_join_info: dict[str, str] | None = None
     table_order: dict[str, int] | None = None
 
@@ -63,6 +63,10 @@ class DataHub:
 
         self.tables = {}
         # If no superclass is specified, default to None and create an empty dictionary.
+        if self.table_functions is None:
+            self.table_functions = {}
+        if self.table_join_info is None:
+            self.table_join_info = {}
         if self.table_order is None:
             self.table_order = {}
 
@@ -80,17 +84,17 @@ class DataHub:
         """
         super().__init_subclass__(**kwargs)
         # get anotatted functions
-        tables, table_join_info, table_order = cls._get_annotations()
+        table_functions, table_join_info, table_order = cls._get_annotations()
 
         # sort tables
-        if len(tables):
-            cls.table_functions = OrderedDict(tables)
+        if len(table_functions):
+            cls.table_functions = table_functions
             cls.table_join_info = table_join_info
             cls.table_order = table_order
         cls.tables = {}
 
     @classmethod
-    def _get_annotations(cls) -> tuple[np.ndarray, dict, dict]:
+    def _get_annotations(cls) -> tuple[dict, dict, dict]:
         """
         Collects and organizes information from annotated functions within the class.
         It extracts the function names, their associated join methods, and their execution order.
@@ -100,28 +104,25 @@ class DataHub:
 
         Returns
         -------
-        tuple[np.ndarray, dict, np.ndarray]
+        tuple[dict, dict, dict]
             A tuple containing three elements:
-            - An array of function and , each containing the name and reference to an annotated function.
+            - An dicionary of function, each containing the name and reference to an annotated function.
             - A dictionary mapping each function name to its specified join method.
             - A dictionary mapping each function name to its executing order
         """
-        tables = []
+        tables = {}
         table_join_info = {}
         table_order = {}
-        order = []
         for member in inspect.getmembers(cls):
             function_name = member[0]
             function = member[1]
             # annotated function has table_process_order
             if hasattr(function, "table_process_order"):
-                tables.append([function_name, function])
+                tables[function_name] = function
                 table_join_info[function_name] = function.join
                 table_order[function_name] = function.table_process_order
-                order.append(function.table_process_order)
 
-        sort_index = np.argsort(order)
-        return np.array(tables)[sort_index], table_join_info, table_order
+        return tables, table_join_info, table_order
 
     def __call__(self, *filters: pl.Expr) -> pl.DataFrame:
         """
@@ -182,8 +183,12 @@ class DataHub:
         pl.DataFrame
             The DataFrame after joining the specified tables.
         """
+        if self.table_order is None:
+            raise RuntimeError("Unexpected Error: table_order is None.")
         df = self.root_df.clone()
-        for table_info in self.tables.values():
+
+        for name, _ in sorted(self.table_order.items(), key=lambda x: x[1]):
+            table_info = self.tables[name]
             if table_info.join is None:
                 # This is used only preprocessing.
                 continue
@@ -242,14 +247,21 @@ class DataHub:
             processing_nodes = []
         else:
             processing_nodes = [
-                DataflowNode(name, level=order)
+                DataflowNode(name, level=order, shape="[()]")
                 for name, order in self.table_order.items()
                 if order == -1
             ]
         for order, name, _, arg_table_names in self.correct_table_and_arguments():
             # get function arguments to check input tables
             logger.info(f"target table name: {name}")
-            node = DataflowNode(name, level=order)
+            if (
+                self.table_join_info is not None
+                and self.table_join_info.get(name) is None
+            ):
+                shape = "[]"
+            else:
+                shape = "[[]]"
+            node = DataflowNode(name, level=order, shape=shape)
 
             for table_name in arg_table_names:
                 for parent_node in processing_nodes:
