@@ -21,13 +21,13 @@ def test__initialize():
     # for keyward arguments
     table2 = pl.DataFrame({"id": ["a", "b", "c", "d", "e"], "table2": [2, 2, 2, 2, 2]})
 
-    data_hub = DataHub(
+    datahub = DataHub(
         root_df,
         table1,
         table2=table2,
     )
     # verify ll tables (positional and keyword arguments) are correctly registered within the DataHub instance.
-    actual = data_hub.tables
+    actual = datahub.tables
     expected = {
         "table1": table1,
         "table2": DataNode(table2, keys=None, join=None, name="table2"),
@@ -97,17 +97,17 @@ def test__raise_TypeError_when_invalid_l_table(inputs):
         )
 
 
-def test__basic_process(basic_data_hub):
+def test__basic_process(basic_datahub):
     """
     Test the basic data processing pipeline of DataHub.
     """
 
-    actual_result = basic_data_hub()
+    actual_result = basic_datahub()
 
     # check processing order
-    assert basic_data_hub.actual_called_order == basic_data_hub.expected_called_order
+    assert basic_datahub.actual_called_order == basic_datahub.expected_called_order
     # check result dataframe
-    assert actual_result.equals(basic_data_hub.expected_result_table)
+    assert actual_result.equals(basic_datahub.expected_result_table)
 
 
 def test__raise_RuntimeError_no_tables():
@@ -126,47 +126,47 @@ def test__raise_RuntimeError_no_tables():
         [pl.col("id") == "a", pl.col("id") != "b"],
     ],
 )
-def test__filterling_output_table(filters, basic_data_hub):
+def test__filterling_output_table(filters, basic_datahub):
     """
     Test the basic data processing pipeline of DataHub.
     """
-    actual_result = basic_data_hub(*filters)
+    actual_result = basic_datahub(*filters)
 
     # check result dataframe
-    expected_table = basic_data_hub.expected_result_table
+    expected_table = basic_datahub.expected_result_table
     for filter in filters:
         expected_table = expected_table.filter(filter)
 
     assert actual_result.equals(expected_table)
 
 
-def test__get_tables(basic_data_hub):
+def test__get_tables(basic_datahub):
     """
     Test getting data by table name
     """
-    basic_data_hub()
+    basic_datahub()
 
     # check created tables
-    assert basic_data_hub.get("table1").table.equals(
-        basic_data_hub.return_tables_of_each_function["table1"]
+    assert basic_datahub.get("table1").table.equals(
+        basic_datahub.return_tables_of_each_function["table1"]
     )
-    assert basic_data_hub.get("table2").table.equals(
-        basic_data_hub.return_tables_of_each_function["table2"]
+    assert basic_datahub.get("table2").table.equals(
+        basic_datahub.return_tables_of_each_function["table2"]
     )
 
 
-def test__raise_KeyError_get_unknown_tables(basic_data_hub):
+def test__raise_KeyError_get_unknown_tables(basic_datahub):
     """
     Test getting unknown data by table name
     """
-    basic_data_hub()
+    basic_datahub()
 
     with pytest.raises(KeyError):
-        basic_data_hub.get("aaa")
+        basic_datahub.get("aaa")
 
 
-def test__search_table(complecated_data_hub):
-    actual = complecated_data_hub.search_tables()
+def test__search_table(complecated_datahub):
+    actual = complecated_datahub.search_tables()
 
     expected = [
         DataflowNode("input_table1", keys=("id",), join="left", level=-1, shape="[()]"),

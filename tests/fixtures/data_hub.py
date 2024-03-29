@@ -98,28 +98,59 @@ class ComplecatedDataHub(DataHub):
     """
 
     @polars_table(0, "id", join="inner")
-    def table1_1(self, input_table2): ...
+    def table1_1(self, input_table2):
+        """
+        Description of table1_1
+        """
+        ...
 
     @polars_table(0, None, join=None)
-    def table1_2(self, input_table2): ...
+    def table1_2(self, input_table2):
+        # this function has not docstrings
+        ...
 
     @polars_table(0, "id1", "id2", join="left")
-    def table1_3(self): ...
+    def table1_3(self):
+        """
+        Description of table1_3
+        """
+        ...
 
     @polars_table(0, None, join=None)
-    def table1_4(self): ...
+    def table1_4(self):
+        """
+        multi lines description of table1_4
+        multi lines description of table1_4
+        """
+        ...
 
     @polars_table(1, None, join=None)
-    def table2_1(self, input_table2, table1_1): ...
+    def table2_1(self, input_table2, table1_1):
+        # this function has not docstrings
+        ...
 
     @polars_table(1, None, join=None)
-    def table2_2(self, table1_1, table1_2): ...
+    def table2_2(self, table1_1, table1_2):
+        # this function has not docstrings
+        ...
 
     @polars_table(1, None, join=None)
-    def table2_3(self, input_table2, table1_3): ...
+    def table2_3(self, input_table2, table1_3):
+        """
+        Description of table2_3
+        """
+        ...
 
     @polars_table(1, None, join=None)
-    def table2_4(self, table1_3): ...
+    def table2_4(self, table1_3):
+        """
+        Description of table2_4
+        """
+        ...
 
     @polars_table(2, "id", join="left")
-    def table3(self, table1_4, table2_3, table2_4): ...
+    def table3(self, table1_4, table2_3, table2_4):
+        """
+        Description of table3
+        """
+        ...

@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 import inspect
-from collections import OrderedDict
 from functools import reduce
 from logging import getLogger
 from operator import and_
 from typing import Callable
 
-import numpy as np
 import polars as pl
 
 from pytred.data_node import DataNode
@@ -243,8 +241,14 @@ class DataHub:
         """
         from pytred.data_node import DataflowNode
 
-        if self.table_order is None or len(self.table_order) == 0:
-            processing_nodes = []
+        if (
+            self.table_order is None
+            or len(self.table_order) == 0
+            or self.table_join_info is None
+        ):
+            raise ValueError(
+                f"{self.__class__.__name__} does not have user defied tables."
+            )
         else:
             processing_nodes = [
                 DataflowNode(
@@ -261,10 +265,7 @@ class DataHub:
         for order, name, _, arg_table_names in self.correct_table_and_arguments():
             # get function arguments to check input tables
             logger.info(f"target table name: {name}")
-            if (
-                self.table_join_info is not None
-                and self.table_join_info.get(name) is None
-            ):
+            if self.table_join_info.get(name) is None:
                 shape = "[]"
             else:
                 shape = "([])"
@@ -273,7 +274,7 @@ class DataHub:
             node = DataflowNode(
                 name,
                 join=join_type,
-                keys=self.table_functions[name].keys,
+                keys=self.table_functions[name].keys,  # type: ignore
                 level=order,
                 shape=shape,
             )

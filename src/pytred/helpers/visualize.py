@@ -32,8 +32,85 @@ class DataflowGraph:
         return graph_str
 
 
+TEMPLATE = """## {datahub_name}
+{datahub_description}
+
+### {datahub_name} detail
+| order | name | table type | join | keys | descriotion |
+| :-: | :-: | :-: | :-: | :-: | :-: |
+{detail}
+
+### Dataflow image
+```mermaid
+{mermaid}
+```
+"""
+
+
+ROW_TAMPLATE = "| {order} | {name} | {table_type} | {join} | {keys} | {description} |"
+
+
+def report_datahub(datahub: DataHub) -> str:
+    """
+    Make report of datahub with markdown format.
+    This report has contents below.
+    1. docstrings of datahub class
+    2. image of dataflow
+    3. tables about each tables in datahub
+
+    Parameters
+    -----
+    datahub: DataHub
+        make report of this datahub
+
+    Returns
+    -------
+    str
+        report of this datahub
+    """
+
+    template_variables = {
+        "datahub_name": datahub.__class__.__name__,
+        "datahub_description": trim(datahub.__doc__).replace("\n", "  \n"),
+    }
+
+    # make graph
+    dataflow_nodes = datahub.search_tables()
+    graph = make_dataflow_graph(dataflow_nodes)
+    template_variables["mermaid"] = str(graph)
+
+    # make table detail
+    detail = ""
+    for node in dataflow_nodes:
+        params = {
+            "order": node.level,
+            "name": node.name,
+        }
+        if node.level == -1:
+            params["table_type"] = "input"
+            params["description"] = ""
+        else:
+            params["table_type"] = "function"
+            params["description"] = trim(getattr(datahub, node.name).__doc__).replace(
+                "\n", "<br>"
+            )
+
+        if node.join is None:
+            params["join"] = ""
+            params["keys"] = ""
+        else:
+            params["join"] = node.join
+            params["keys"] = ", ".join(node.keys)
+
+        detail += ROW_TAMPLATE.format(**params) + "\n"
+
+    template_variables["detail"] = detail
+
+    return TEMPLATE.format(**template_variables)
+
+
 def make_dataflow_graph_from_datahub(
-    data_hub: DataHub,
+    datahub: DataHub,
     output: str | pathlib.Path = "./dataflow.png",
     direction: Literal["TD", "LR"] = "TD",
 ):
@@ -42,7 +119,7 @@ def make_dataflow_graph_from_datahub(
 
     Parameters
     ----------
-    data_hub: DataHub
+    datahub: DataHub
         visualizing dataflow of this DataHub
     output: str | pathlib.Path
         file path of dataflow image
@@ -50,7 +127,7 @@ def make_dataflow_graph_from_datahub(
         graph direction
 
     """
-    nodes = data_hub.search_tables()
+    nodes = datahub.search_tables()
 
     graph = make_dataflow_graph(nodes, direction)
 
@@ -127,7 +204,7 @@ def make_dataflow_graph(
             if _node.keys is None:
                 keys = ""
             else:
-                keys = "<br>" + "\n".join([f"- {key}" for key in _node.keys])
+                keys = "<br>" + "<br>".join([f"- {key}" for key in _node.keys])
             link_type = "-" * (level_diff + 1) + f"->|{_node.join}{keys}|"
             edge = DataEdge(_node.name, "root_df", link_type=link_type)
             graph.add_edge(edge)
@@ -143,7 +220,7 @@ def make_dataflow_graph(
     return graph
 
 
-def trim(docstring: str):
+def trim(docstring: str | None) -> str:
     """
     ref.: https://peps.python.org/pep-0257/
     """
