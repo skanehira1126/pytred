@@ -3,6 +3,8 @@ from logging import INFO, getLogger
 import polars as pl
 import pytest
 
+from pytred.data_node import DataNode
+
 from .fixtures.data_hub import BasicDataHub, ComplecatedDataHub
 
 
@@ -21,6 +23,7 @@ def basic_data_hub():
 @pytest.fixture(scope="function")
 def complecated_data_hub():
     return ComplecatedDataHub(
-        root_df=pl.DataFrame(),
-        input_table=pl.DataFrame(),
+        pl.DataFrame(),
+        DataNode(pl.DataFrame(), keys=("id",), join="left", name="input_table1"),
+        input_table2=pl.DataFrame(),
     )

@@ -226,11 +226,11 @@ class DataHub:
         """
         for _, name, function, arg_table_names in self.correct_table_and_arguments():
             # execute processing function
-            table, keys = function(
+            table = function(
                 self, *[self.get(table_name).table for table_name in arg_table_names]
             )
             self.tables[name] = DataNode(
-                table, keys, join=self.table_join_info[name], name=name
+                table, function.keys, join=self.table_join_info[name], name=name
             )
 
     def search_tables(self) -> list:
@@ -247,10 +247,17 @@ class DataHub:
             processing_nodes = []
         else:
             processing_nodes = [
-                DataflowNode(name, level=order, shape="[()]")
+                DataflowNode(
+                    name,
+                    join=self.get(name).join,
+                    keys=self.get(name).keys,
+                    level=order,
+                    shape="[()]",
+                )
                 for name, order in self.table_order.items()
                 if order == -1
             ]
+
         for order, name, _, arg_table_names in self.correct_table_and_arguments():
             # get function arguments to check input tables
             logger.info(f"target table name: {name}")
@@ -260,8 +267,16 @@ class DataHub:
             ):
                 shape = "[]"
             else:
-                shape = "[[]]"
-            node = DataflowNode(name, level=order, shape=shape)
+                shape = "([])"
+            join_type = self.table_join_info.get(name)
+
+            node = DataflowNode(
+                name,
+                join=join_type,
+                keys=self.table_functions[name].keys,
+                level=order,
+                shape=shape,
+            )
 
             for table_name in arg_table_names:
                 for parent_node in processing_nodes:

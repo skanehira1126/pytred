@@ -168,29 +168,38 @@ def test__raise_KeyError_get_unknown_tables(basic_data_hub):
 def test__search_table(complecated_data_hub):
     actual = complecated_data_hub.search_tables()
 
-    expected = (
-        [DataflowNode("input_table", level=-1, shape="[()]")]
-        + [DataflowNode(f"table1_{cnt}", level=0) for cnt in range(1, 5)]
-        + [DataflowNode(f"table2_{cnt}", level=1) for cnt in range(1, 5)]
-        + [DataflowNode("table3", level=2, shape="[[]]")]
-    )
+    expected = [
+        DataflowNode("input_table1", keys=("id",), join="left", level=-1, shape="[()]"),
+        DataflowNode("input_table2", keys=None, join=None, level=-1, shape="[()]"),
+        DataflowNode("table1_1", keys=("id",), join="inner", level=0, shape="([])"),
+        DataflowNode("table1_2", keys=None, join="inner", level=0, shape="[]"),
+        DataflowNode(
+            "table1_3", keys=("id1", "id2"), join="inner", level=0, shape="([])"
+        ),
+        DataflowNode("table1_4", keys=None, join=None, level=0, shape="[]"),
+        DataflowNode("table2_1", keys=None, join=None, level=1, shape="[]"),
+        DataflowNode("table2_2", keys=None, join=None, level=1, shape="[]"),
+        DataflowNode("table2_3", keys=None, join=None, level=1, shape="[]"),
+        DataflowNode("table2_4", keys=None, join=None, level=1, shape="[]"),
+        DataflowNode("table3", keys=("id",), join="left", level=2, shape="([])"),
+    ]
 
     # add children
-    expected[0].add_child(expected[1])
-    expected[0].add_child(expected[2])
-    expected[0].add_child(expected[5])
-    expected[0].add_child(expected[7])
-
-    expected[1].add_child(expected[5])
+    expected[1].add_child(expected[2])
+    expected[1].add_child(expected[3])
     expected[1].add_child(expected[6])
+    expected[1].add_child(expected[8])
 
     expected[2].add_child(expected[6])
+    expected[2].add_child(expected[7])
 
     expected[3].add_child(expected[7])
-    expected[3].add_child(expected[8])
 
+    expected[4].add_child(expected[8])
     expected[4].add_child(expected[9])
-    expected[7].add_child(expected[9])
-    expected[8].add_child(expected[9])
+
+    expected[5].add_child(expected[10])
+    expected[8].add_child(expected[10])
+    expected[9].add_child(expected[10])
 
     assert actual == expected
