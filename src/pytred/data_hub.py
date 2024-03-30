@@ -55,9 +55,7 @@ class DataHub:
                 if isinstance(df, pl.DataFrame):
                     input_tables.append(DataNode(df, keys=None, join=None, name=name))
                 else:
-                    raise TypeError(
-                        f"named_tables must be pl.DataFrame, not {type(df)}."
-                    )
+                    raise TypeError(f"named_tables must be pl.DataFrame, not {type(df)}.")
 
         self.tables = {}
         # If no superclass is specified, default to None and create an empty dictionary.
@@ -81,8 +79,8 @@ class DataHub:
         Collects annotated functions and their execution order when initializing a subclass.
         """
         super().__init_subclass__(**kwargs)
-        # get anotatted functions
-        table_functions, table_join_info, table_order = cls._get_annotations()
+        # get annotated functions
+        table_functions, table_join_info, table_order = cls._get_decorators()
 
         # sort tables
         if len(table_functions):
@@ -92,7 +90,7 @@ class DataHub:
         cls.tables = {}
 
     @classmethod
-    def _get_annotations(cls) -> tuple[dict, dict, dict]:
+    def _get_decorators(cls) -> tuple[dict, dict, dict]:
         """
         Collects and organizes information from annotated functions within the class.
         It extracts the function names, their associated join methods, and their execution order.
@@ -198,7 +196,7 @@ class DataHub:
             )
         return df
 
-    def correct_table_and_arguments(self):
+    def collect_table_and_arguments(self):
 
         for name, order in sorted(self.table_order.items(), key=lambda x: x[1]):
             if order == -1:
@@ -222,11 +220,9 @@ class DataHub:
         """
         Creates tables based on the annotated functions and their execution order.
         """
-        for _, name, function, arg_table_names in self.correct_table_and_arguments():
+        for _, name, function, arg_table_names in self.collect_table_and_arguments():
             # execute processing function
-            table = function(
-                self, *[self.get(table_name).table for table_name in arg_table_names]
-            )
+            table = function(self, *[self.get(table_name).table for table_name in arg_table_names])
             self.tables[name] = DataNode(
                 table, function.keys, join=self.table_join_info[name], name=name
             )
@@ -241,14 +237,8 @@ class DataHub:
         """
         from pytred.data_node import DataflowNode
 
-        if (
-            self.table_order is None
-            or len(self.table_order) == 0
-            or self.table_join_info is None
-        ):
-            raise ValueError(
-                f"{self.__class__.__name__} does not have user defied tables."
-            )
+        if self.table_order is None or len(self.table_order) == 0 or self.table_join_info is None:
+            raise ValueError(f"{self.__class__.__name__} does not have user defied tables.")
         else:
             processing_nodes = [
                 DataflowNode(
@@ -262,7 +252,7 @@ class DataHub:
                 if order == -1
             ]
 
-        for order, name, _, arg_table_names in self.correct_table_and_arguments():
+        for order, name, _, arg_table_names in self.collect_table_and_arguments():
             # get function arguments to check input tables
             logger.info(f"target table name: {name}")
             if self.table_join_info.get(name) is None:
