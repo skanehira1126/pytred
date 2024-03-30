@@ -23,6 +23,11 @@ class DataflowNode:
     ----------
     name : str
         The name of the preprocessing step this node represents.
+    join: str or None
+        Join type of this table with root_df.
+        If join is None, this table does not joined with root_df.
+    keys: Sequence of str or None
+        join keys. If 'join' is None, keys is None too.
     level : int
         The hierarchical level of this node in the processing graph.
         Root level is indicated by 0, with higher numbers indicating deeper levels.
@@ -33,6 +38,8 @@ class DataflowNode:
     """
 
     name: str
+    join: str | None
+    keys: Sequence[str] | None
     level: int
     parents: list[DataflowNode] = field(default_factory=list)
     children: list[DataflowNode] = field(default_factory=list)
@@ -43,14 +50,8 @@ class DataflowNode:
             (self.name == other.name)
             & (self.level == other.level)
             & (self.shape == other.shape)
-            & (
-                sorted([p.name for p in self.parents])
-                == sorted([p.name for p in other.parents])
-            )
-            & (
-                sorted([c.name for c in self.children])
-                == sorted([c.name for c in other.children])
-            )
+            & (sorted([p.name for p in self.parents]) == sorted([p.name for p in other.parents]))
+            & (sorted([c.name for c in self.children]) == sorted([c.name for c in other.children]))
         )
 
     def __ne__(self, other):

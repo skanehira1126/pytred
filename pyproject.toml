@@ -1,7 +1,7 @@
 [project]
 name = "pytred"
 dynamic = ["version"]
-description = "Add your description here"
+description = "Python Tools for Refinement and Enhancement of Data"
 authors = [
     { name = "Shinichi Kanehira", email = "skanehir1126@gmail.com" }
 ]
@@ -46,5 +46,10 @@ exclude = [
     'tests'
 ]
 ignore_missing_imports = true
+
+[tool.black]
+line-length = 99
+target-version = ["py311"]
+include = '\.pyi?$'
 
 

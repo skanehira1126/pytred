@@ -12,12 +12,10 @@ class BasicDataHub(DataHub):
 
         # inputs table
         inputs_table = DataNode(
-            pl.DataFrame(
-                {"id": ["a", "b", "c"], "inputs_table": ["input", "input", "input"]}
-            ),
+            pl.DataFrame({"id": ["a", "b", "c"], "inputs_table": ["input", "input", "input"]}),
             join="left",
             keys=["id"],
-            name="input_table",
+            name="input_table2",
         )
 
         super().__init__(root_df, inputs_table)
@@ -54,9 +52,7 @@ class BasicDataHub(DataHub):
     @polars_table(1, "id", join="left")
     def table1_2(self, table1):
         self.actual_called_order.append("table1_2")
-        return table1.select("id", col1_2=pl.col("col1") + 1).filter(
-            pl.col("id") != "c"
-        )
+        return table1.select("id", col1_2=pl.col("col1") + 1).filter(pl.col("id") != "c")
 
     @polars_table(0, "id", join="left")
     def table2(self):
@@ -97,29 +93,60 @@ class ComplecatedDataHub(DataHub):
     This is example of visualizing data processing flow
     """
 
-    @polars_table(0, None, join=None)
-    def table1_1(self, input_table): ...
+    @polars_table(0, "id", join="inner")
+    def table1_1(self, input_table2):
+        """
+        Description of table1_1
+        """
+        ...
 
     @polars_table(0, None, join=None)
-    def table1_2(self, input_table): ...
+    def table1_2(self, input_table2):
+        # this function has not docstrings
+        ...
+
+    @polars_table(0, "id1", "id2", join="left")
+    def table1_3(self):
+        """
+        Description of table1_3
+        """
+        ...
 
     @polars_table(0, None, join=None)
-    def table1_3(self): ...
-
-    @polars_table(0, None, join=None)
-    def table1_4(self): ...
-
-    @polars_table(1, None, join=None)
-    def table2_1(self, input_table, table1_1): ...
-
-    @polars_table(1, None, join=None)
-    def table2_2(self, table1_1, table1_2): ...
+    def table1_4(self):
+        """
+        multi lines description of table1_4
+        multi lines description of table1_4
+        """
+        ...
 
     @polars_table(1, None, join=None)
-    def table2_3(self, input_table, table1_3): ...
+    def table2_1(self, input_table2, table1_1):
+        # this function has not docstrings
+        ...
 
     @polars_table(1, None, join=None)
-    def table2_4(self, table1_3): ...
+    def table2_2(self, table1_1, table1_2):
+        # this function has not docstrings
+        ...
 
-    @polars_table(2, None, join="left")
-    def table3(self, table1_4, table2_3, table2_4): ...
+    @polars_table(1, None, join=None)
+    def table2_3(self, input_table2, table1_3):
+        """
+        Description of table2_3
+        """
+        ...
+
+    @polars_table(1, None, join=None)
+    def table2_4(self, table1_3):
+        """
+        Description of table2_4
+        """
+        ...
+
+    @polars_table(2, "id", join="left")
+    def table3(self, table1_4, table2_3, table2_4):
+        """
+        Description of table3
+        """
+        ...

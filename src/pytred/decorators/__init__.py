@@ -33,13 +33,9 @@ def table(
 
     if engine == "polars":
         if check_polars_join_keys(join):
-            return polars_table(
-                order, *keys, join=join, is_validate_unique=is_validate_unique
-            )
+            return polars_table(order, *keys, join=join, is_validate_unique=is_validate_unique)
         else:
-            raise ValueError(
-                "join must be 'inner', 'left', 'outer', 'semi', 'anti' or 'cross'."
-            )
+            raise ValueError("join must be 'inner', 'left', 'outer', 'semi', 'anti' or 'cross'.")
     else:
         raise ValueError("engine must be 'polars only'.")
 

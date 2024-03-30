@@ -21,13 +21,13 @@ def test__initialize():
     # for keyward arguments
     table2 = pl.DataFrame({"id": ["a", "b", "c", "d", "e"], "table2": [2, 2, 2, 2, 2]})
 
-    data_hub = DataHub(
+    datahub = DataHub(
         root_df,
         table1,
         table2=table2,
     )
     # verify ll tables (positional and keyword arguments) are correctly registered within the DataHub instance.
-    actual = data_hub.tables
+    actual = datahub.tables
     expected = {
         "table1": table1,
         "table2": DataNode(table2, keys=None, join=None, name="table2"),
@@ -97,17 +97,17 @@ def test__raise_TypeError_when_invalid_l_table(inputs):
         )
 
 
-def test__basic_process(basic_data_hub):
+def test__basic_process(basic_datahub):
     """
     Test the basic data processing pipeline of DataHub.
     """
 
-    actual_result = basic_data_hub()
+    actual_result = basic_datahub()
 
     # check processing order
-    assert basic_data_hub.actual_called_order == basic_data_hub.expected_called_order
+    assert basic_datahub.actual_called_order == basic_datahub.expected_called_order
     # check result dataframe
-    assert actual_result.equals(basic_data_hub.expected_result_table)
+    assert actual_result.equals(basic_datahub.expected_result_table)
 
 
 def test__raise_RuntimeError_no_tables():
@@ -126,71 +126,78 @@ def test__raise_RuntimeError_no_tables():
         [pl.col("id") == "a", pl.col("id") != "b"],
     ],
 )
-def test__filterling_output_table(filters, basic_data_hub):
+def test__filterling_output_table(filters, basic_datahub):
     """
     Test the basic data processing pipeline of DataHub.
     """
-    actual_result = basic_data_hub(*filters)
+    actual_result = basic_datahub(*filters)
 
     # check result dataframe
-    expected_table = basic_data_hub.expected_result_table
+    expected_table = basic_datahub.expected_result_table
     for filter in filters:
         expected_table = expected_table.filter(filter)
 
     assert actual_result.equals(expected_table)
 
 
-def test__get_tables(basic_data_hub):
+def test__get_tables(basic_datahub):
     """
     Test getting data by table name
     """
-    basic_data_hub()
+    basic_datahub()
 
     # check created tables
-    assert basic_data_hub.get("table1").table.equals(
-        basic_data_hub.return_tables_of_each_function["table1"]
+    assert basic_datahub.get("table1").table.equals(
+        basic_datahub.return_tables_of_each_function["table1"]
     )
-    assert basic_data_hub.get("table2").table.equals(
-        basic_data_hub.return_tables_of_each_function["table2"]
+    assert basic_datahub.get("table2").table.equals(
+        basic_datahub.return_tables_of_each_function["table2"]
     )
 
 
-def test__raise_KeyError_get_unknown_tables(basic_data_hub):
+def test__raise_KeyError_get_unknown_tables(basic_datahub):
     """
     Test getting unknown data by table name
     """
-    basic_data_hub()
+    basic_datahub()
 
     with pytest.raises(KeyError):
-        basic_data_hub.get("aaa")
+        basic_datahub.get("aaa")
 
 
-def test__search_table(complecated_data_hub):
-    actual = complecated_data_hub.search_tables()
+def test__search_table(complecated_datahub):
+    actual = complecated_datahub.search_tables()
 
-    expected = (
-        [DataflowNode("input_table", level=-1, shape="[()]")]
-        + [DataflowNode(f"table1_{cnt}", level=0) for cnt in range(1, 5)]
-        + [DataflowNode(f"table2_{cnt}", level=1) for cnt in range(1, 5)]
-        + [DataflowNode("table3", level=2, shape="[[]]")]
-    )
+    expected = [
+        DataflowNode("input_table1", keys=("id",), join="left", level=-1, shape="[()]"),
+        DataflowNode("input_table2", keys=None, join=None, level=-1, shape="[()]"),
+        DataflowNode("table1_1", keys=("id",), join="inner", level=0, shape="([])"),
+        DataflowNode("table1_2", keys=None, join="inner", level=0, shape="[]"),
+        DataflowNode("table1_3", keys=("id1", "id2"), join="inner", level=0, shape="([])"),
+        DataflowNode("table1_4", keys=None, join=None, level=0, shape="[]"),
+        DataflowNode("table2_1", keys=None, join=None, level=1, shape="[]"),
+        DataflowNode("table2_2", keys=None, join=None, level=1, shape="[]"),
+        DataflowNode("table2_3", keys=None, join=None, level=1, shape="[]"),
+        DataflowNode("table2_4", keys=None, join=None, level=1, shape="[]"),
+        DataflowNode("table3", keys=("id",), join="left", level=2, shape="([])"),
+    ]
 
     # add children
-    expected[0].add_child(expected[1])
-    expected[0].add_child(expected[2])
-    expected[0].add_child(expected[5])
-    expected[0].add_child(expected[7])
-
-    expected[1].add_child(expected[5])
+    expected[1].add_child(expected[2])
+    expected[1].add_child(expected[3])
     expected[1].add_child(expected[6])
+    expected[1].add_child(expected[8])
 
     expected[2].add_child(expected[6])
+    expected[2].add_child(expected[7])
 
     expected[3].add_child(expected[7])
-    expected[3].add_child(expected[8])
 
+    expected[4].add_child(expected[8])
     expected[4].add_child(expected[9])
-    expected[7].add_child(expected[9])
-    expected[8].add_child(expected[9])
+
+    expected[5].add_child(expected[10])
+    expected[8].add_child(expected[10])
+    expected[9].add_child(expected[10])
 
     assert actual == expected

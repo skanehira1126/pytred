@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 import inspect
-from collections import OrderedDict
 from functools import reduce
 from logging import getLogger
 from operator import and_
 from typing import Callable
 
-import numpy as np
 import polars as pl
 
 from pytred.data_node import DataNode
@@ -57,9 +55,7 @@ class DataHub:
                 if isinstance(df, pl.DataFrame):
                     input_tables.append(DataNode(df, keys=None, join=None, name=name))
                 else:
-                    raise TypeError(
-                        f"named_tables must be pl.DataFrame, not {type(df)}."
-                    )
+                    raise TypeError(f"named_tables must be pl.DataFrame, not {type(df)}.")
 
         self.tables = {}
         # If no superclass is specified, default to None and create an empty dictionary.
@@ -83,8 +79,8 @@ class DataHub:
         Collects annotated functions and their execution order when initializing a subclass.
         """
         super().__init_subclass__(**kwargs)
-        # get anotatted functions
-        table_functions, table_join_info, table_order = cls._get_annotations()
+        # get annotated functions
+        table_functions, table_join_info, table_order = cls._get_decorators()
 
         # sort tables
         if len(table_functions):
@@ -94,7 +90,7 @@ class DataHub:
         cls.tables = {}
 
     @classmethod
-    def _get_annotations(cls) -> tuple[dict, dict, dict]:
+    def _get_decorators(cls) -> tuple[dict, dict, dict]:
         """
         Collects and organizes information from annotated functions within the class.
         It extracts the function names, their associated join methods, and their execution order.
@@ -200,7 +196,7 @@ class DataHub:
             )
         return df
 
-    def correct_table_and_arguments(self):
+    def collect_table_and_arguments(self):
 
         for name, order in sorted(self.table_order.items(), key=lambda x: x[1]):
             if order == -1:
@@ -224,13 +220,11 @@ class DataHub:
         """
         Creates tables based on the annotated functions and their execution order.
         """
-        for _, name, function, arg_table_names in self.correct_table_and_arguments():
+        for _, name, function, arg_table_names in self.collect_table_and_arguments():
             # execute processing function
-            table, keys = function(
-                self, *[self.get(table_name).table for table_name in arg_table_names]
-            )
+            table = function(self, *[self.get(table_name).table for table_name in arg_table_names])
             self.tables[name] = DataNode(
-                table, keys, join=self.table_join_info[name], name=name
+                table, function.keys, join=self.table_join_info[name], name=name
             )
 
     def search_tables(self) -> list:
@@ -243,25 +237,37 @@ class DataHub:
         """
         from pytred.data_node import DataflowNode
 
-        if self.table_order is None or len(self.table_order) == 0:
-            processing_nodes = []
+        if self.table_order is None or len(self.table_order) == 0 or self.table_join_info is None:
+            raise ValueError(f"{self.__class__.__name__} does not have user defied tables.")
         else:
             processing_nodes = [
-                DataflowNode(name, level=order, shape="[()]")
+                DataflowNode(
+                    name,
+                    join=self.get(name).join,
+                    keys=self.get(name).keys,
+                    level=order,
+                    shape="[()]",
+                )
                 for name, order in self.table_order.items()
                 if order == -1
             ]
-        for order, name, _, arg_table_names in self.correct_table_and_arguments():
+
+        for order, name, _, arg_table_names in self.collect_table_and_arguments():
             # get function arguments to check input tables
             logger.info(f"target table name: {name}")
-            if (
-                self.table_join_info is not None
-                and self.table_join_info.get(name) is None
-            ):
+            if self.table_join_info.get(name) is None:
                 shape = "[]"
             else:
-                shape = "[[]]"
-            node = DataflowNode(name, level=order, shape=shape)
+                shape = "([])"
+            join_type = self.table_join_info.get(name)
+
+            node = DataflowNode(
+                name,
+                join=join_type,
+                keys=self.table_functions[name].keys,  # type: ignore
+                level=order,
+                shape=shape,
+            )
 
             for table_name in arg_table_names:
                 for parent_node in processing_nodes:
