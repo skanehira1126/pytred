@@ -91,9 +91,7 @@ def report_datahub(datahub: DataHub) -> str:
             params["description"] = ""
         else:
             params["table_type"] = "function"
-            params["description"] = trim(getattr(datahub, node.name).__doc__).replace(
-                "\n", "<br>"
-            )
+            params["description"] = trim(getattr(datahub, node.name).__doc__).replace("\n", "<br>")
 
         if node.join is None:
             params["join"] = ""
@@ -212,9 +210,7 @@ def make_dataflow_graph(
         graph.add_node(_node)
 
     graph.add_node(
-        DataflowNode(
-            name="root_df", join=None, keys=None, level=max_level + 1, shape="[[]]"
-        )
+        DataflowNode(name="root_df", join=None, keys=None, level=max_level + 1, shape="[[]]")
     )
 
     return graph

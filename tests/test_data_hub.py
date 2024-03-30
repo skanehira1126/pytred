@@ -173,9 +173,7 @@ def test__search_table(complecated_datahub):
         DataflowNode("input_table2", keys=None, join=None, level=-1, shape="[()]"),
         DataflowNode("table1_1", keys=("id",), join="inner", level=0, shape="([])"),
         DataflowNode("table1_2", keys=None, join="inner", level=0, shape="[]"),
-        DataflowNode(
-            "table1_3", keys=("id1", "id2"), join="inner", level=0, shape="([])"
-        ),
+        DataflowNode("table1_3", keys=("id1", "id2"), join="inner", level=0, shape="([])"),
         DataflowNode("table1_4", keys=None, join=None, level=0, shape="[]"),
         DataflowNode("table2_1", keys=None, join=None, level=1, shape="[]"),
         DataflowNode("table2_2", keys=None, join=None, level=1, shape="[]"),

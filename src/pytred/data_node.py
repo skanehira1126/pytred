@@ -50,14 +50,8 @@ class DataflowNode:
             (self.name == other.name)
             & (self.level == other.level)
             & (self.shape == other.shape)
-            & (
-                sorted([p.name for p in self.parents])
-                == sorted([p.name for p in other.parents])
-            )
-            & (
-                sorted([c.name for c in self.children])
-                == sorted([c.name for c in other.children])
-            )
+            & (sorted([p.name for p in self.parents]) == sorted([p.name for p in other.parents]))
+            & (sorted([c.name for c in self.children]) == sorted([c.name for c in other.children]))
         )
 
     def __ne__(self, other):

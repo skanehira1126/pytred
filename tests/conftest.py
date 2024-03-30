@@ -32,9 +32,6 @@ def complecated_datahub():
 
 @pytest.fixture()
 def expected_report_of_complecated_datahub():
-    path = (
-        pathlib.Path(__file__).parent
-        / "fixtures/expected_report_of_complecated_datahub.md"
-    )
+    path = pathlib.Path(__file__).parent / "fixtures/expected_report_of_complecated_datahub.md"
     with path.open("r") as f:
         return f.read()

@@ -64,15 +64,11 @@ def polars_table(
         DuplicatedError
             If key uniqueness validation fails.
         """
-        logger.info(
-            f"set table by {func.__name__}. keys: {keys}, join: {join}, order: {order}."
-        )
+        logger.info(f"set table by {func.__name__}. keys: {keys}, join: {join}, order: {order}.")
 
         if (join is None or join in ["cross"]) and (len(keys) >= 1 and keys[0] != None):
             raise ValueError("When 'join' is None or 'cross', keys must be empty.")
-        if (join is not None and join not in ["cross"]) and (
-            len(keys) == 0 or keys[0] is None
-        ):
+        if (join is not None and join not in ["cross"]) and (len(keys) == 0 or keys[0] is None):
             raise ValueError(f"When 'join' is {join}, keys must not be empty.")
 
         @wraps(func)

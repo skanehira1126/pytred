@@ -63,9 +63,7 @@ class TestPolarsTable:
             def prep_function():
                 return simple_df
 
-    def test__raise_DuplicatedError_when_dataframe_has_duplicated_values(
-        self, duplicate_df
-    ):
+    def test__raise_DuplicatedError_when_dataframe_has_duplicated_values(self, duplicate_df):
 
         @polars_table(0, "id", join="inner")
         def prep_function():
@@ -121,9 +119,7 @@ class TestPolarsTable:
         [[[2, "id", "left", "True"], [2, ("id",), "left", True]]],
     )
     def test__validate_function_attributes(self, actual, expected, simple_df):
-        @polars_table(
-            actual[0], actual[1], join=actual[2], is_validate_unique=actual[3]
-        )
+        @polars_table(actual[0], actual[1], join=actual[2], is_validate_unique=actual[3])
         def prep_function():
             return simple_df
 

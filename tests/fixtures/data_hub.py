@@ -12,9 +12,7 @@ class BasicDataHub(DataHub):
 
         # inputs table
         inputs_table = DataNode(
-            pl.DataFrame(
-                {"id": ["a", "b", "c"], "inputs_table": ["input", "input", "input"]}
-            ),
+            pl.DataFrame({"id": ["a", "b", "c"], "inputs_table": ["input", "input", "input"]}),
             join="left",
             keys=["id"],
             name="input_table2",
@@ -54,9 +52,7 @@ class BasicDataHub(DataHub):
     @polars_table(1, "id", join="left")
     def table1_2(self, table1):
         self.actual_called_order.append("table1_2")
-        return table1.select("id", col1_2=pl.col("col1") + 1).filter(
-            pl.col("id") != "c"
-        )
+        return table1.select("id", col1_2=pl.col("col1") + 1).filter(pl.col("id") != "c")
 
     @polars_table(0, "id", join="left")
     def table2(self):
