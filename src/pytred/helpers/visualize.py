@@ -5,10 +5,12 @@ import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Literal, Type
+
+import polars as pl
 
 from pytred.data_hub import DataHub
-from pytred.data_node import DataEdge, DataflowNode
+from pytred.data_node import DataEdge, DataflowNode, DummyDataNode
 
 
 @dataclass
@@ -50,7 +52,7 @@ TEMPLATE = """## {datahub_name}
 ROW_TAMPLATE = "| {order} | {name} | {table_type} | {join} | {keys} | {description} |"
 
 
-def report_datahub(datahub: DataHub) -> str:
+def report_datahub(datahub_class: Type[DataHub], *tables: DummyDataNode) -> str:
     """
     Make report of datahub with markdown format.
     This report has contents below.
@@ -60,8 +62,10 @@ def report_datahub(datahub: DataHub) -> str:
 
     Parameters
     -----
-    datahub: DataHub
+    datahub_class: DataHub class
         make report of this datahub
+    *tables: DummyDataNode
+        DummyDataNode used in input DataHub class
 
     Returns
     -------
@@ -70,12 +74,12 @@ def report_datahub(datahub: DataHub) -> str:
     """
 
     template_variables = {
-        "datahub_name": datahub.__class__.__name__,
-        "datahub_description": trim(datahub.__doc__).replace("\n", "  \n"),
+        "datahub_name": datahub_class.__name__,
+        "datahub_description": trim(datahub_class.__doc__).replace("\n", "  \n"),
     }
 
     # make graph
-    dataflow_nodes = datahub.search_tables()
+    dataflow_nodes = datahub_class.search_tables(*tables)
     graph = make_dataflow_graph(dataflow_nodes)
     template_variables["mermaid"] = str(graph)
 
@@ -91,7 +95,9 @@ def report_datahub(datahub: DataHub) -> str:
             params["description"] = ""
         else:
             params["table_type"] = "function"
-            params["description"] = trim(getattr(datahub, node.name).__doc__).replace("\n", "<br>")
+            params["description"] = trim(getattr(datahub_class, node.name).__doc__).replace(
+                "\n", "<br>"
+            )
 
         if node.join is None:
             params["join"] = ""
@@ -108,7 +114,8 @@ def report_datahub(datahub: DataHub) -> str:
 
 
 def make_dataflow_graph_from_datahub(
-    datahub: DataHub,
+    datahub_class: Type[DataHub],
+    *tables: DummyDataNode,
     output: str | pathlib.Path = "./dataflow.png",
     direction: Literal["TD", "LR"] = "TD",
 ):
@@ -117,15 +124,17 @@ def make_dataflow_graph_from_datahub(
 
     Parameters
     ----------
-    datahub: DataHub
+    datahub: DataHub class
         visualizing dataflow of this DataHub
     output: str | pathlib.Path
         file path of dataflow image
     direction: {'TD', 'LR'}, default 'TD'
         graph direction
+    *tables: DummyDataNode
+        DataNode used in input DataHub class
 
     """
-    nodes = datahub.search_tables()
+    nodes = datahub_class.search_tables(*tables)
 
     graph = make_dataflow_graph(nodes, direction)
 

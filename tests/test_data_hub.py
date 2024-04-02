@@ -165,8 +165,9 @@ def test__raise_KeyError_get_unknown_tables(basic_datahub):
         basic_datahub.get("aaa")
 
 
-def test__search_table(complecated_datahub):
-    actual = complecated_datahub.search_tables()
+def test__search_table(inputs_visualize_test):
+    datahub_class, inputs_tables = inputs_visualize_test
+    actual = datahub_class.search_tables(*inputs_tables)
 
     expected = [
         DataflowNode("input_table1", keys=("id",), join="left", level=-1, shape="[()]"),

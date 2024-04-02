@@ -7,6 +7,7 @@ nav:
       - DataHub: "api_reference/data_hub.md"
       - DataNode: "api_reference/data_node.md"
       - decorators: "api_reference/decorators.md"
+      - CLI: "api_reference/cli.md"
 plugins:
   - search
   - mkdocs-jupyter
@@ -20,4 +21,6 @@ plugins:
             docstring_style: "numpy"
 markdown_extensions:
   - admonition
+  - pymdownx.details
+  - pymdownx.superfences
   - codehilite

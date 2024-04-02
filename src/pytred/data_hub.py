@@ -8,7 +8,7 @@ from typing import Callable
 
 import polars as pl
 
-from pytred.data_node import DataNode
+from pytred.data_node import DataNode, DummyDataNode
 
 logger = getLogger(__name__)
 
@@ -44,18 +44,10 @@ class DataHub:
         input_tables: list[DataNode] = []
         # tables of positional arguments
         if len(tables) >= 1:
-            for data_node in tables:
-                if isinstance(data_node, DataNode):
-                    input_tables.append(data_node)
-                else:
-                    raise TypeError(f"tables must be DataNode, not {type(data_node)}.")
+            input_tables += self.validate_tables_is_data_node(*tables)
         # tables of keyword arguments
         if len(named_tables) >= 1:
-            for name, df in named_tables.items():
-                if isinstance(df, pl.DataFrame):
-                    input_tables.append(DataNode(df, keys=None, join=None, name=name))
-                else:
-                    raise TypeError(f"named_tables must be pl.DataFrame, not {type(df)}.")
+            input_tables += self.parse_tables_to_data_node(**named_tables)
 
         self.tables = {}
         # If no superclass is specified, default to None and create an empty dictionary.
@@ -88,6 +80,32 @@ class DataHub:
             cls.table_join_info = table_join_info
             cls.table_order = table_order
         cls.tables = {}
+
+    @staticmethod
+    def validate_tables_is_data_node(*tables) -> list[DataNode]:
+        """
+        Validate `tables` are DataNode instance.
+        """
+        input_tables = []
+        for data_node in tables:
+            if isinstance(data_node, DataNode):
+                input_tables.append(data_node)
+            else:
+                raise TypeError(f"tables must be DataNode, not {type(data_node)}.")
+        return input_tables
+
+    @staticmethod
+    def parse_tables_to_data_node(**tables) -> list[DataNode]:
+        """
+        Parse `tables` to DataNode instance
+        """
+        input_tables = []
+        for name, df in tables.items():
+            if isinstance(df, pl.DataFrame):
+                input_tables.append(DataNode(df, keys=None, join=None, name=name))
+            else:
+                raise TypeError(f"named_tables must be pl.DataFrame, not {type(df)}.")
+        return input_tables
 
     @classmethod
     def _get_decorators(cls) -> tuple[dict, dict, dict]:
@@ -227,9 +245,14 @@ class DataHub:
                 table, function.keys, join=self.table_join_info[name], name=name
             )
 
-    def search_tables(self) -> list:
+    @classmethod
+    def search_tables(cls, *input_tables: DummyDataNode) -> list:
         """
         Creates tables based on the annotated functions and their execution order.
+
+        Parameters
+        ----------
+        input_table: DataNode
 
         Returns
         -------
@@ -237,34 +260,31 @@ class DataHub:
         """
         from pytred.data_node import DataflowNode
 
-        if self.table_order is None or len(self.table_order) == 0 or self.table_join_info is None:
-            raise ValueError(f"{self.__class__.__name__} does not have user defied tables.")
-        else:
-            processing_nodes = [
-                DataflowNode(
-                    name,
-                    join=self.get(name).join,
-                    keys=self.get(name).keys,
-                    level=order,
-                    shape="[()]",
-                )
-                for name, order in self.table_order.items()
-                if order == -1
-            ]
+        processing_nodes = [
+            DataflowNode(
+                data_node.name,
+                join=data_node.join,
+                keys=data_node.keys,
+                level=-1,
+                shape="[()]",
+            )
+            for data_node in input_tables
+        ]
 
-        for order, name, _, arg_table_names in self.collect_table_and_arguments():
+        for order, name, function, arg_table_names in cls.collect_table_and_arguments(cls):  # type: ignore
             # get function arguments to check input tables
             logger.info(f"target table name: {name}")
-            if self.table_join_info.get(name) is None:
+
+            join_type = function.join  # type: ignore
+            if join_type is None:  # type: ignore
                 shape = "[]"
             else:
                 shape = "([])"
-            join_type = self.table_join_info.get(name)
 
             node = DataflowNode(
                 name,
                 join=join_type,
-                keys=self.table_functions[name].keys,  # type: ignore
+                keys=cls.table_functions[name].keys,  # type: ignore
                 level=order,
                 shape=shape,
             )
