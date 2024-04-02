@@ -23,6 +23,9 @@ build-backend = "flit_core.buildapi"
 [tool.hatch.version]
 path = "src/pytred/__init__.py"
 
+[project.scripts]
+pytred = "pytred.cli:cli"
+
 [tool.rye]
 managed = true
 dev-dependencies = [
