@@ -4,7 +4,7 @@ from logging import INFO, getLogger
 import polars as pl
 import pytest
 
-from pytred.data_node import DataNode
+from pytred.data_node import DataNode, DummyDataNode
 
 from .fixtures.data_hub import BasicDataHub, ComplecatedDataHub
 
@@ -35,3 +35,20 @@ def expected_report_of_complecated_datahub():
     path = pathlib.Path(__file__).parent / "fixtures/expected_report_of_complecated_datahub.md"
     with path.open("r") as f:
         return f.read()
+
+
+@pytest.fixture(scope="function")
+def inputs_visualize_test():
+    return (
+        ComplecatedDataHub,
+        [
+            DummyDataNode(
+                "input_table1",
+                keys=[
+                    "id",
+                ],
+                join="left",
+            ),
+            DummyDataNode(name="input_table2"),
+        ],
+    )

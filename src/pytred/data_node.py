@@ -15,6 +15,17 @@ class DataNode:
 
 
 @dataclass
+class DummyDataNode:
+    """
+    Dummy DataNode class to visualize dataflow
+    """
+
+    name: str
+    keys: Sequence[str] | None = None
+    join: Literal["inner", "left", "outer", "semi", "anti", "cross"] | None = None
+
+
+@dataclass
 class DataflowNode:
     """
     A node in a processing graph representing a data preprocessing step.
