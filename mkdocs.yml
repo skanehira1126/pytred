@@ -7,7 +7,8 @@ nav:
       - DataHub: "api_reference/data_hub.md"
       - DataNode: "api_reference/data_node.md"
       - decorators: "api_reference/decorators.md"
-      - CLI: "api_reference/cli.md"
+  - Tutorials:
+      - CLI: "tutorials/cli.md"
 plugins:
   - search
   - mkdocs-jupyter
@@ -24,3 +25,8 @@ markdown_extensions:
   - pymdownx.details
   - pymdownx.superfences
   - codehilite
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
