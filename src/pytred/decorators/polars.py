@@ -66,7 +66,7 @@ def polars_table(
         """
         logger.info(f"set table by {func.__name__}. keys: {keys}, join: {join}, order: {order}.")
 
-        if (join is None or join in ["cross"]) and (len(keys) >= 1 and keys[0] != None):
+        if (join is None or join in ["cross"]) and (len(keys) >= 1 and keys[0] is not None):
             raise ValueError("When 'join' is None or 'cross', keys must be empty.")
         if (join is not None and join not in ["cross"]) and (len(keys) == 0 or keys[0] is None):
             raise ValueError(f"When 'join' is {join}, keys must not be empty.")
@@ -87,7 +87,7 @@ def polars_table(
                 if is_validate_unique:
                     if len(df.unique(subset=keys)) != len(df):
                         raise DuplicatedError(
-                            f"Duplicate entries exist based on the specified keys {keys}."
+                            f"There are duplicate values based on the specified keys {keys} returned by {func.__name__}."
                         )
             return df
 
