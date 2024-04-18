@@ -16,8 +16,8 @@ class EmptyDataNode:
     """
 
     name: str
-    keys: Sequence[str] | None = None
-    join: POLARS_JOIN_METHOD | None = None
+    keys: Sequence[str] | None
+    join: POLARS_JOIN_METHOD | None
 
 
 @dataclass

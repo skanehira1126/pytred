@@ -46,12 +46,12 @@ def inputs_visualize_test():
         ComplecatedDataHub,
         [
             EmptyDataNode(
-                "input_table1",
+                name="input_table1",
                 keys=[
                     "id",
                 ],
                 join="left",
             ),
-            EmptyDataNode(name="input_table2"),
+            EmptyDataNode(name="input_table2", keys=None, join=None),
         ],
     )

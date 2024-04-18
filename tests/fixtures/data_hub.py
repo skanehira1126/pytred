@@ -68,7 +68,7 @@ class BasicDataHub(DataHub):
 
 class InvalidDataHubNoTable(DataHub):
     """
-    結合しないテーブルが存在しない
+    結合するテーブルが存在しない
     """
 
     def __init__(self):
