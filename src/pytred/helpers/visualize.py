@@ -41,7 +41,7 @@ TEMPLATE = """## {datahub_name}
 
 ### {datahub_name} detail
 | order | name | table type | join | keys | descriotion |
-| :-: | :-: | :-: | :-: | :-: | :-: |
+| :-: | :-: | :-: | :-: | :-: | :-- |
 {detail}
 
 ### Dataflow image

@@ -3,7 +3,7 @@ This is example of visualizing data processing flow
 
 ### ComplecatedDataHub detail
 | order | name | table type | join | keys | descriotion |
-| :-: | :-: | :-: | :-: | :-: | :-: |
+| :-: | :-: | :-: | :-: | :-: | :-- |
 | -1 | input_table1 | input | left | id |  |
 | -1 | input_table2 | input |  |  |  |
 | 0 | table1_1 | function | inner | id | Description of table1_1 |
