@@ -3,7 +3,8 @@ import pytest
 from polars.testing import assert_frame_equal
 
 from pytred.decorators import polars_table
-from pytred.exceptions import DuplicatedError, InvalidReturnValueError
+from pytred.exceptions import DuplicatedError
+from pytred.exceptions import InvalidReturnValueError
 
 
 @pytest.fixture

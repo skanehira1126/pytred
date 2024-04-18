@@ -8,7 +8,8 @@ from typing import Callable
 
 import polars as pl
 
-from pytred.data_node import DataNode, DummyDataNode
+from pytred.data_node import DataNode
+from pytred.data_node import DummyDataNode
 
 logger = getLogger(__name__)
 

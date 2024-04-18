@@ -1,7 +1,8 @@
 import polars as pl
 import pytest
 
-from pytred import DataHub, DataNode
+from pytred import DataHub
+from pytred import DataNode
 from pytred.data_node import DataflowNode
 
 

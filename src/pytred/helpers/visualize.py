@@ -4,13 +4,17 @@ import pathlib
 import subprocess
 import sys
 import tempfile
-from dataclasses import dataclass, field
-from typing import Literal, Type
+from dataclasses import dataclass
+from dataclasses import field
+from typing import Literal
+from typing import Type
 
 import polars as pl
 
 from pytred.data_hub import DataHub
-from pytred.data_node import DataEdge, DataflowNode, DummyDataNode
+from pytred.data_node import DataEdge
+from pytred.data_node import DataflowNode
+from pytred.data_node import DummyDataNode
 
 
 @dataclass

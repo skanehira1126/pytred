@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from functools import wraps
 from logging import getLogger
-from typing import Callable, Literal
+from typing import Callable
+from typing import Literal
 
 import polars as pl
 
-from pytred.exceptions import DuplicatedError, InvalidReturnValueError
+from pytred.exceptions import DuplicatedError
+from pytred.exceptions import InvalidReturnValueError
 
 logger = getLogger(__name__)
 

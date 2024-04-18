@@ -1,12 +1,15 @@
 import pathlib
-from logging import INFO, getLogger
+from logging import INFO
+from logging import getLogger
 
 import polars as pl
 import pytest
 
-from pytred.data_node import DataNode, DummyDataNode
+from pytred.data_node import DataNode
+from pytred.data_node import DummyDataNode
 
-from .fixtures.data_hub import BasicDataHub, ComplecatedDataHub
+from .fixtures.data_hub import BasicDataHub
+from .fixtures.data_hub import ComplecatedDataHub
 
 
 @pytest.fixture(scope="class", autouse=True)
