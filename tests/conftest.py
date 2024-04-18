@@ -6,7 +6,7 @@ import polars as pl
 import pytest
 
 from pytred.data_node import DataNode
-from pytred.data_node import DummyDataNode
+from pytred.data_node import EmptyDataNode
 
 from .fixtures.data_hub import BasicDataHub
 from .fixtures.data_hub import ComplecatedDataHub
@@ -45,13 +45,13 @@ def inputs_visualize_test():
     return (
         ComplecatedDataHub,
         [
-            DummyDataNode(
+            EmptyDataNode(
                 "input_table1",
                 keys=[
                     "id",
                 ],
                 join="left",
             ),
-            DummyDataNode(name="input_table2"),
+            EmptyDataNode(name="input_table2"),
         ],
     )

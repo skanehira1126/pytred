@@ -9,7 +9,7 @@ from typing import Callable
 import polars as pl
 
 from pytred.data_node import DataNode
-from pytred.data_node import DummyDataNode
+from pytred.data_node import EmptyDataNode
 
 logger = getLogger(__name__)
 
@@ -247,7 +247,7 @@ class DataHub:
             )
 
     @classmethod
-    def search_tables(cls, *input_tables: DummyDataNode) -> list:
+    def search_tables(cls, *input_tables: EmptyDataNode) -> list:
         """
         Creates tables based on the annotated functions and their execution order.
 
