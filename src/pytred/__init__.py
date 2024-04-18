@@ -1,4 +1,8 @@
-from logging import DEBUG, WARN, Formatter, StreamHandler, getLogger
+from logging import DEBUG
+from logging import WARN
+from logging import Formatter
+from logging import StreamHandler
+from logging import getLogger
 
 from pytred.data_hub import DataHub
 from pytred.data_node import DataNode

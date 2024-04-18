@@ -1,28 +1,31 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Literal, Sequence
+from dataclasses import dataclass
+from dataclasses import field
+from typing import Sequence
 
 import polars as pl
+
+from pytred._types import POLARS_JOIN_METHOD
+
+
+@dataclass
+class EmptyDataNode:
+    """
+    DataNode class to visualize dataflow
+    """
+
+    name: str
+    keys: Sequence[str] | None
+    join: POLARS_JOIN_METHOD | None
 
 
 @dataclass
 class DataNode:
     table: pl.DataFrame
     keys: Sequence[str] | None
-    join: Literal["inner", "left", "outer", "semi", "anti", "cross"] | None
+    join: POLARS_JOIN_METHOD | None
     name: str
-
-
-@dataclass
-class DummyDataNode:
-    """
-    Dummy DataNode class to visualize dataflow
-    """
-
-    name: str
-    keys: Sequence[str] | None = None
-    join: Literal["inner", "left", "outer", "semi", "anti", "cross"] | None = None
 
 
 @dataclass
@@ -49,8 +52,8 @@ class DataflowNode:
     """
 
     name: str
-    join: str | None
     keys: Sequence[str] | None
+    join: POLARS_JOIN_METHOD | None
     level: int
     parents: list[DataflowNode] = field(default_factory=list)
     children: list[DataflowNode] = field(default_factory=list)

@@ -4,3 +4,7 @@ class DuplicatedError(Exception):
 
 class InvalidReturnValueError(Exception):
     pass
+
+
+class TableNotFoundError(Exception):
+    pass

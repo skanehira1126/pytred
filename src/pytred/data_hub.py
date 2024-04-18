@@ -4,20 +4,21 @@ import inspect
 from functools import reduce
 from logging import getLogger
 from operator import and_
-from typing import Callable
+from typing import Sequence
 
 import polars as pl
 
-from pytred.data_node import DataNode, DummyDataNode
+from pytred.data_node import DataNode
+from pytred.data_node import EmptyDataNode
+from pytred.exceptions import TableNotFoundError
 
 logger = getLogger(__name__)
 
 
 class DataHub:
-    tables: dict[str, DataNode]
-    table_functions: dict[str, Callable] | None = None
     table_join_info: dict[str, str] | None = None
-    table_order: dict[str, int] | None = None
+    table_join_keys: dict[str, Sequence[str]] | None = None
+    registerd_tables_order: dict[str, int] | None = None
 
     def __init__(
         self,
@@ -44,58 +45,65 @@ class DataHub:
         input_tables: list[DataNode] = []
         # tables of positional arguments
         if len(tables) >= 1:
-            input_tables += self.validate_tables_is_data_node(*tables)
+            data_nodes = self.validate_tables_is_node(*tables)
+            input_tables += data_nodes
         # tables of keyword arguments
         if len(named_tables) >= 1:
-            input_tables += self.parse_tables_to_data_node(**named_tables)
+            input_tables += self.parse_tables_to_node(**named_tables)
 
-        self.tables = {}
-        # If no superclass is specified, default to None and create an empty dictionary.
-        if self.table_functions is None:
-            self.table_functions = {}
-        if self.table_join_info is None:
-            self.table_join_info = {}
-        if self.table_order is None:
-            self.table_order = {}
+        self.tables: dict[str, DataNode] = {}
+        self.table_order = {}
 
+        # User defined tables
+        if self.registerd_tables_order is not None:
+            self.table_order.update(self.registerd_tables_order)
+
+        # input tables
         for data_node in input_tables:
             if data_node.name in self.tables.keys():
                 raise ValueError(f"{data_node.name} is duplicated.")
 
             self.tables[data_node.name] = data_node
 
-            self.table_order.update({name: -1 for name in self.tables.keys()})
+            self.table_order[data_node.name] = -1
+
+        # Check table
+        if len(self.table_order) == 0:
+            raise TableNotFoundError(f"There are no table in {self.__class__.__name__}.")
 
     def __init_subclass__(cls, **kwargs):
         """
         Collects annotated functions and their execution order when initializing a subclass.
         """
         super().__init_subclass__(**kwargs)
+
+        cls.table_join_info = {}
+        cls.table_join_keys = {}
+        cls.registerd_tables_order = {}
+
         # get annotated functions
-        table_functions, table_join_info, table_order = cls._get_decorators()
+        table_join_info, table_join_keys, table_order = cls._get_decorators()
 
         # sort tables
-        if len(table_functions):
-            cls.table_functions = table_functions
-            cls.table_join_info = table_join_info
-            cls.table_order = table_order
-        cls.tables = {}
+        cls.table_join_info.update(table_join_info)
+        cls.table_join_keys.update(table_join_keys)
+        cls.registerd_tables_order.update(table_order)
 
     @staticmethod
-    def validate_tables_is_data_node(*tables) -> list[DataNode]:
+    def validate_tables_is_node(*tables) -> list[DataNode]:
         """
         Validate `tables` are DataNode instance.
         """
-        input_tables = []
+        input_data_node = []
         for data_node in tables:
             if isinstance(data_node, DataNode):
-                input_tables.append(data_node)
+                input_data_node.append(data_node)
             else:
                 raise TypeError(f"tables must be DataNode, not {type(data_node)}.")
-        return input_tables
+        return input_data_node
 
     @staticmethod
-    def parse_tables_to_data_node(**tables) -> list[DataNode]:
+    def parse_tables_to_node(**tables) -> list[DataNode]:
         """
         Parse `tables` to DataNode instance
         """
@@ -106,6 +114,16 @@ class DataHub:
             else:
                 raise TypeError(f"named_tables must be pl.DataFrame, not {type(df)}.")
         return input_tables
+
+    @staticmethod
+    def make_list_table_order(table_order: dict[str, int]) -> list[tuple[str, int]]:
+        """
+        convert dictionary to list
+        """
+
+        list_table_order = sorted(table_order.items(), key=lambda x: x[1])
+
+        return list_table_order
 
     @classmethod
     def _get_decorators(cls) -> tuple[dict, dict, dict]:
@@ -120,23 +138,24 @@ class DataHub:
         -------
         tuple[dict, dict, dict]
             A tuple containing three elements:
-            - An dicionary of function, each containing the name and reference to an annotated function.
             - A dictionary mapping each function name to its specified join method.
+            - A dictionary mapping each function name to its specified join keys.
             - A dictionary mapping each function name to its executing order
         """
-        tables = {}
         table_join_info = {}
+        table_join_keys = {}
         table_order = {}
         for member in inspect.getmembers(cls):
             function_name = member[0]
             function = member[1]
             # annotated function has table_process_order
             if hasattr(function, "table_process_order"):
-                tables[function_name] = function
                 table_join_info[function_name] = function.join
                 table_order[function_name] = function.table_process_order
+                if function.keys is not None:
+                    table_join_keys[function_name] = function.keys
 
-        return tables, table_join_info, table_order
+        return table_join_info, table_join_keys, table_order
 
     def __call__(self, *filters: pl.Expr) -> pl.DataFrame:
         """
@@ -169,7 +188,8 @@ class DataHub:
             The resulting DataFrame after applying the data processing pipeline and filters.
         """
         # On calling execute(), annotated functions are executed to create each DataFrame as needed.
-        if self.table_functions is not None:
+        # if self.table_functions is not None:
+        if self.table_order is not None and max([v for v in self.table_order.values()]) >= 0:
             self.create_tables()
 
         # Validate to self.tables is not empty.
@@ -214,14 +234,15 @@ class DataHub:
             )
         return df
 
-    def collect_table_and_arguments(self):
+    def collect_table_and_arguments(self, table_order: dict):
 
-        for name, order in sorted(self.table_order.items(), key=lambda x: x[1]):
+        list_table_order = self.make_list_table_order(table_order)
+
+        for name, order in list_table_order:
             if order == -1:
                 continue
-            function = self.table_functions[name]
             # get function arguments to check input tables
-            sig = inspect.signature(function)
+            sig = inspect.signature(getattr(self, name))
 
             # Read arguments annotated with table information, executing past tables as arguments
             # Skip the first argument if it's declared as self or cls
@@ -232,21 +253,29 @@ class DataHub:
                 else:
                     arg_table_names.append(arg_name)
 
-            yield order, name, function, arg_table_names
+            yield order, name, arg_table_names
 
     def create_tables(self):
         """
         Creates tables based on the annotated functions and their execution order.
         """
-        for _, name, function, arg_table_names in self.collect_table_and_arguments():
+        for _, name, arg_table_names in self.collect_table_and_arguments(self.table_order):
             # execute processing function
-            table = function(self, *[self.get(table_name).table for table_name in arg_table_names])
+            if len(arg_table_names):
+                table = getattr(self, name)(
+                    *[self.get(table_name).table for table_name in arg_table_names]
+                )
+            else:
+                table = getattr(self, name)()
             self.tables[name] = DataNode(
-                table, function.keys, join=self.table_join_info[name], name=name
+                table,
+                self.table_join_keys.get(name),
+                join=self.table_join_info[name],
+                name=name,
             )
 
     @classmethod
-    def search_tables(cls, *input_tables: DummyDataNode) -> list:
+    def search_tables(cls, *input_tables: EmptyDataNode) -> list:
         """
         Creates tables based on the annotated functions and their execution order.
 
@@ -271,11 +300,11 @@ class DataHub:
             for data_node in input_tables
         ]
 
-        for order, name, function, arg_table_names in cls.collect_table_and_arguments(cls):  # type: ignore
+        for order, name, arg_table_names in cls.collect_table_and_arguments(cls, cls.registerd_tables_order):  # type: ignore
             # get function arguments to check input tables
             logger.info(f"target table name: {name}")
 
-            join_type = function.join  # type: ignore
+            join_type = getattr(cls, name).join  # type: ignore
             if join_type is None:  # type: ignore
                 shape = "[]"
             else:
@@ -284,7 +313,7 @@ class DataHub:
             node = DataflowNode(
                 name,
                 join=join_type,
-                keys=cls.table_functions[name].keys,  # type: ignore
+                keys=cls.table_join_keys.get(name),  # type: ignore
                 level=order,
                 shape=shape,
             )

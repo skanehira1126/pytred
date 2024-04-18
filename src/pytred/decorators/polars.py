@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from functools import wraps
 from logging import getLogger
-from typing import Callable, Literal
+from typing import Callable
 
 import polars as pl
 
-from pytred.exceptions import DuplicatedError, InvalidReturnValueError
+from pytred._types import POLARS_JOIN_METHOD
+from pytred.exceptions import DuplicatedError
+from pytred.exceptions import InvalidReturnValueError
 
 logger = getLogger(__name__)
 
@@ -14,7 +16,7 @@ logger = getLogger(__name__)
 def polars_table(
     order: int,
     *keys: str,
-    join: Literal["inner", "left", "outer", "semi", "anti", "cross"] | None = None,
+    join: POLARS_JOIN_METHOD | None = None,
     is_validate_unique: bool = True,
 ):
     """
@@ -26,7 +28,7 @@ def polars_table(
         The order in which the decorated function should be executed in the data processing pipeline.
     keys : tuple
         The keys to be used for joining data tables. If keys are provided, the decorator will check for their presence in the DataFrame returned by the function.
-    join : {'inner', 'left', 'outer', 'semi', 'anti', and 'cross'}, optional
+    join : {‘inner’, ‘left’, ‘outer’, ‘semi’, ‘anti’, ‘cross’, ‘outer_coalesce’}, optional
         The type of join to be used when combining data tables. Supported join types are 'inner', 'left', 'outer', 'semi', 'anti', and 'cross'.
         If join is None, it implies that the resulting table from this function is intended for use only within preprocessing steps and will not be directly included in the final output of the DataHub pipeline.
     is_validate_unique : bool, default True

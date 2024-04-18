@@ -1,8 +1,10 @@
 import polars as pl
 import pytest
 
-from pytred import DataHub, DataNode
+from pytred import DataHub
+from pytred import DataNode
 from pytred.data_node import DataflowNode
+from pytred.exceptions import TableNotFoundError
 
 
 def test__initialize():
@@ -114,9 +116,8 @@ def test__raise_RuntimeError_no_tables():
     """Test that a RuntimeError is raised when no tables are provided to the DataHub."""
     from .fixtures.data_hub import InvalidDataHubNoTable
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(TableNotFoundError):
         hub = InvalidDataHubNoTable()
-        hub.execute()
 
 
 @pytest.mark.parametrize(

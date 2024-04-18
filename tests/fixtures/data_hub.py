@@ -1,6 +1,7 @@
 import polars as pl
 
-from pytred import DataHub, DataNode
+from pytred import DataHub
+from pytred import DataNode
 from pytred.decorators import polars_table
 
 
@@ -67,7 +68,7 @@ class BasicDataHub(DataHub):
 
 class InvalidDataHubNoTable(DataHub):
     """
-    結合しないテーブルが存在しない
+    結合するテーブルが存在しない
     """
 
     def __init__(self):

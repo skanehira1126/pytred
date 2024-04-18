@@ -1,6 +1,7 @@
 import tempfile
 
-from pytred.helpers.visualize import make_dataflow_graph_from_datahub, report_datahub
+from pytred.helpers.visualize import make_dataflow_graph_from_datahub
+from pytred.helpers.visualize import report_datahub
 
 
 def test__execution_test_make_dataflow_graph_from_datahub(inputs_visualize_test):

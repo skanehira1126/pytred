@@ -4,13 +4,15 @@ import pathlib
 import subprocess
 import sys
 import tempfile
-from dataclasses import dataclass, field
-from typing import Literal, Type
-
-import polars as pl
+from dataclasses import dataclass
+from dataclasses import field
+from typing import Literal
+from typing import Type
 
 from pytred.data_hub import DataHub
-from pytred.data_node import DataEdge, DataflowNode, DummyDataNode
+from pytred.data_node import DataEdge
+from pytred.data_node import DataflowNode
+from pytred.data_node import EmptyDataNode
 
 
 @dataclass
@@ -39,7 +41,7 @@ TEMPLATE = """## {datahub_name}
 
 ### {datahub_name} detail
 | order | name | table type | join | keys | descriotion |
-| :-: | :-: | :-: | :-: | :-: | :-: |
+| :-: | :-: | :-: | :-: | :-: | :-- |
 {detail}
 
 ### Dataflow image
@@ -52,7 +54,7 @@ TEMPLATE = """## {datahub_name}
 ROW_TAMPLATE = "| {order} | {name} | {table_type} | {join} | {keys} | {description} |"
 
 
-def report_datahub(datahub_class: Type[DataHub], *tables: DummyDataNode) -> str:
+def report_datahub(datahub_class: Type[DataHub], *tables: EmptyDataNode) -> str:
     """
     Make report of datahub with markdown format.
     This report has contents below.
@@ -64,8 +66,8 @@ def report_datahub(datahub_class: Type[DataHub], *tables: DummyDataNode) -> str:
     -----
     datahub_class: DataHub class
         make report of this datahub
-    *tables: DummyDataNode
-        DummyDataNode used in input DataHub class
+    *tables: EmptyDataNode
+        EmptyDataNode used in input DataHub class
 
     Returns
     -------
@@ -115,7 +117,7 @@ def report_datahub(datahub_class: Type[DataHub], *tables: DummyDataNode) -> str:
 
 def make_dataflow_graph_from_datahub(
     datahub_class: Type[DataHub],
-    *tables: DummyDataNode,
+    *tables: EmptyDataNode,
     output: str | pathlib.Path = "./dataflow.png",
     direction: Literal["TD", "LR"] = "TD",
 ):
@@ -130,7 +132,7 @@ def make_dataflow_graph_from_datahub(
         file path of dataflow image
     direction: {'TD', 'LR'}, default 'TD'
         graph direction
-    *tables: DummyDataNode
+    *tables: EmptyDataNode
         DataNode used in input DataHub class
 
     """

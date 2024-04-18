@@ -1,12 +1,15 @@
 import pathlib
-from logging import INFO, getLogger
+from logging import INFO
+from logging import getLogger
 
 import polars as pl
 import pytest
 
-from pytred.data_node import DataNode, DummyDataNode
+from pytred.data_node import DataNode
+from pytred.data_node import EmptyDataNode
 
-from .fixtures.data_hub import BasicDataHub, ComplecatedDataHub
+from .fixtures.data_hub import BasicDataHub
+from .fixtures.data_hub import ComplecatedDataHub
 
 
 @pytest.fixture(scope="class", autouse=True)
@@ -42,13 +45,13 @@ def inputs_visualize_test():
     return (
         ComplecatedDataHub,
         [
-            DummyDataNode(
-                "input_table1",
+            EmptyDataNode(
+                name="input_table1",
                 keys=[
                     "id",
                 ],
                 join="left",
             ),
-            DummyDataNode(name="input_table2"),
+            EmptyDataNode(name="input_table2", keys=None, join=None),
         ],
     )

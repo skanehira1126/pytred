@@ -6,7 +6,7 @@ import json
 from logging import getLogger
 
 import pytred
-from pytred.data_node import DummyDataNode
+from pytred.data_node import EmptyDataNode
 from pytred.helpers import visualize
 
 logger = getLogger(__name__)
@@ -41,7 +41,7 @@ def cli():
 
 def cli_report(file_path: str, class_name: str, inputs_table: list[str]):
 
-    # parse inputs_table and make DummyDataNode
+    # parse inputs_table and make EmptyDataNode
     data_nodes = []
     for input_table_str in inputs_table:
         try:
@@ -51,7 +51,7 @@ def cli_report(file_path: str, class_name: str, inputs_table: list[str]):
             raise e
 
         data_nodes.append(
-            DummyDataNode(
+            EmptyDataNode(
                 name=table["name"],
                 join=table.get("join", None),
                 keys=table.get("keys", None),
