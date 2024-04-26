@@ -66,7 +66,7 @@ class MarkdownTableTabulator:
             if self.keys is None:
                 self.keys = set(row.keys())
 
-    def build(self, index: bool = False):
+    def build(self, index: bool = False) -> str:
         """
         returns dataframe as markdown format
 
@@ -80,4 +80,5 @@ class MarkdownTableTabulator:
         else:
             table = pd.DataFrame(self.column_data)
 
-        return table.to_markdown(index=index)
+        md_table = table.to_markdown(index=index)
+        return md_table
