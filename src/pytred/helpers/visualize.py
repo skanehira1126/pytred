@@ -13,6 +13,7 @@ from pytred.data_hub import DataHub
 from pytred.data_node import DataEdge
 from pytred.data_node import DataflowNode
 from pytred.data_node import EmptyDataNode
+from pytred.helpers.md_tabulator import MarkdownTableTabulator
 
 
 @dataclass
@@ -40,8 +41,6 @@ TEMPLATE = """## {datahub_name}
 {datahub_description}
 
 ### {datahub_name} detail
-| order | name | table type | join | keys | descriotion |
-| :-: | :-: | :-: | :-: | :-: | :-- |
 {detail}
 
 ### Dataflow image
@@ -49,9 +48,6 @@ TEMPLATE = """## {datahub_name}
 {mermaid}
 ```
 """
-
-
-ROW_TAMPLATE = "| {order} | {name} | {table_type} | {join} | {keys} | {description} |"
 
 
 def report_datahub(datahub_class: Type[DataHub], *tables: EmptyDataNode) -> str:
@@ -86,7 +82,7 @@ def report_datahub(datahub_class: Type[DataHub], *tables: EmptyDataNode) -> str:
     template_variables["mermaid"] = str(graph)
 
     # make table detail
-    detail = ""
+    md_tabulator = MarkdownTableTabulator(mode="row")
     for node in dataflow_nodes:
         params = {
             "order": node.level,
@@ -108,9 +104,9 @@ def report_datahub(datahub_class: Type[DataHub], *tables: EmptyDataNode) -> str:
             params["join"] = node.join
             params["keys"] = ", ".join(node.keys)
 
-        detail += ROW_TAMPLATE.format(**params) + "\n"
+        md_tabulator.add_rows(params)
 
-    template_variables["detail"] = detail
+    template_variables["detail"] = md_tabulator.build(index=False)
 
     return TEMPLATE.format(**template_variables)
 

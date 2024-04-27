@@ -12,6 +12,7 @@ dependencies = [
     "typing-extensions>=4.10",
     "pyarrow>=11",
     "matplotlib",
+    "tabulate",
 ]
 readme = "README.md"
 requires-python = ">= 3.9"
