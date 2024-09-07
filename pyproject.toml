@@ -31,7 +31,6 @@ managed = true
 dev-dependencies = [
     "mkdocs>=1.5.3",
     "pytest>=8.1.1",
-    "tox>=4.14.1",
     "ipykernel>=6.29.3",
     "scikit-learn>=1.1",
     "mkdocstrings>=0.24.1",
@@ -39,6 +38,7 @@ dev-dependencies = [
     "mkdocstrings-python>=1.9.0",
     "graphviz>=0.20.2",
     "mkdocs-jupyter>=0.24.6",
+    "tox-uv>=1.11.2",
 ]
 
 [tool.hatch.metadata]
