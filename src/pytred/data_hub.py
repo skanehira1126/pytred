@@ -291,7 +291,7 @@ class DataHub:
 
         Parameters
         ----------
-        input_table: DataNode
+        input_tables: EmptyDataNode
 
         Returns
         -------
