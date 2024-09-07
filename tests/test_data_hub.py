@@ -91,7 +91,7 @@ def test__raise_TypeError_when_invalid_positional_table(inputs):
         {"a": 1, "b": 2},
     ],
 )
-def test__raise_TypeError_when_invalid_l_table(inputs):
+def test__raise_TypeError_when_invalid_table(inputs):
     with pytest.raises(TypeError):
         DataHub(
             pl.DataFrame({"id": ["a", "b", "c"]}),
@@ -117,7 +117,7 @@ def test__raise_RuntimeError_no_tables():
     from .fixtures.data_hub import InvalidDataHubNoTable
 
     with pytest.raises(TableNotFoundError):
-        hub = InvalidDataHubNoTable()
+        _ = InvalidDataHubNoTable()
 
 
 @pytest.mark.parametrize(

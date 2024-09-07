@@ -5,6 +5,7 @@ from typing import Literal
 
 from typing_extensions import TypeGuard
 
+from pytred._types import POLARS_JOIN_METHOD
 from pytred.decorators.polars import polars_table
 
 
@@ -43,7 +44,7 @@ def table(
 
 def check_polars_join_keys(
     join: str | None,
-) -> TypeGuard[Literal["inner", "left", "outer", "semi", "anti", "cross"] | None]:
+) -> TypeGuard[POLARS_JOIN_METHOD | None]:
     """
     Validates whether the specified join method is supported by the Polars engine.
 
