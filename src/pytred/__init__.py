@@ -12,7 +12,7 @@ from logging import getLogger
 from pytred.data_hub import DataHub
 from pytred.data_node import DataNode
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 logger = getLogger(__name__)
 fmt = Formatter("[%(levelname)s] %(name)s %(asctime)s - %(filename)s: %(lineno)d: %(message)s")
