@@ -1,8 +1,6 @@
 from typing import Callable
-from typing import Literal
 
-
-META_KEYS = Literal["table_process_order", "join", "keys", "is_optional"]
+from pytred._types import META_KEYS
 
 
 def get_metadata(target: Callable, key: META_KEYS):

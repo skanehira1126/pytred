@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Literal
-from typing import Sequence
 
 import pandas as pd
 

@@ -6,7 +6,6 @@ import inspect
 from logging import getLogger
 from operator import and_
 from typing import Literal
-from typing import Sequence
 
 import polars as pl
 
@@ -249,7 +248,6 @@ class DataHub:
     def collect_table_and_arguments(
         cls, table_order: dict[str, int], include_input_table: bool = False
     ):
-
         list_table_order = cls.sort_tables_by_execute_order(table_order)
 
         for name, order in list_table_order:
@@ -262,7 +260,7 @@ class DataHub:
                 # get function arguments to check input tables
                 sig = inspect.signature(getattr(cls, name))
 
-                # Read arguments annotated with table information, executing past tables as arguments
+                # Read arguments annotated with table information
                 # Skip the first argument if it's declared as self or cls
                 for idx, arg_name in enumerate(sig.parameters.keys(), 1):
                     if idx == 1 and (arg_name == "self" or arg_name == "cls"):
@@ -422,9 +420,9 @@ class DataHub:
         """
         Get the hierarchical structure of data preprocessing nodes.
 
-        Given a list of ProcessingNode objects, which each have a name, level, and list of children,
+        Given a list of ProcessingNode objects, which each have a name, level, and children,
         this function creates a directed graph that visualizes the dependencies between the nodes.
-        Nodes at the same level are grouped together, and dependencies are shown with directed edges.
+        Nodes at the same level are grouped together, and dependencies are shown with edges.
 
         Parameters
         ----------
