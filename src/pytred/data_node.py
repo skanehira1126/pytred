@@ -3,6 +3,9 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from dataclasses import field
+from typing import Literal
+from typing import Sequence
+
 
 import polars as pl
 
@@ -99,6 +102,9 @@ class DataflowNode:
         shape_close = self.shape[len(self.shape) // 2 :]
         return f"{self.name}{shape_open}{self.name}{shape_close}"
 
+    def is_input_table(self):
+        return self.level == -1
+
 
 @dataclass
 class DataEdge:
@@ -108,3 +114,27 @@ class DataEdge:
 
     def fmt_mermaid(self):
         return f"{self.source} {self.link_type} {self.target}"
+
+
+@dataclass
+class DataflowGraph:
+    graph_direction: Literal["LR", "TD"] = "TD"
+    nodes: list[DataflowNode] = field(default_factory=list, init=False)
+    edges: list[DataEdge] = field(default_factory=list, init=False)
+
+    def add_node(self, node: DataflowNode):
+        self.nodes.append(node)
+
+    def add_edge(self, edge: DataEdge):
+        self.edges.append(edge)
+
+    def __str__(self):
+        graph_str = f"graph {self.graph_direction}\n"
+        for node in self.nodes:
+            graph_str += f"    {node.fmt_mermaid()}\n"
+        for edge in self.edges:
+            graph_str += f"    {edge.fmt_mermaid()}\n"
+        return graph_str
+
+    def get_nodes_by_level(self, level: int):
+        return list(filter(lambda x: x.level == level, self.nodes))

@@ -97,7 +97,7 @@ def test__raise_TypeError_when_invalid_positional_table(inputs):
         {"a": 1, "b": 2},
     ],
 )
-def test__raise_TypeError_when_invalid_l_table(inputs):
+def test__raise_TypeError_when_invalid_table(inputs):
     with pytest.raises(TypeError):
         DataHub(
             pl.DataFrame({"id": ["a", "b", "c"]}),

@@ -12,7 +12,6 @@ from logging import getLogger
 from pytred.data_hub import DataHub
 from pytred.data_node import DataNode
 
-
 __version__ = "0.3.0"
 
 logger = getLogger(__name__)
