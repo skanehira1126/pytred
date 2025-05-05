@@ -5,13 +5,13 @@ import subprocess
 import sys
 import tempfile
 from typing import Literal
-from typing import Type
 
 from pytred.data_hub import DataHub
 from pytred.data_node import DataflowGraph
 from pytred.data_node import DataflowNode
 from pytred.data_node import EmptyDataNode
 from pytred.helpers.md_tabulator import MarkdownTableTabulator
+
 
 TEMPLATE = """## {datahub_name}
 {datahub_description}
@@ -26,7 +26,7 @@ TEMPLATE = """## {datahub_name}
 """
 
 
-def report_datahub(datahub_class: Type[DataHub], *tables: EmptyDataNode) -> str:
+def report_datahub(datahub_class: type[DataHub], *tables: EmptyDataNode) -> str:
     """
     Make report of datahub with markdown format.
     This report has contents below.
@@ -87,7 +87,7 @@ def report_datahub(datahub_class: Type[DataHub], *tables: EmptyDataNode) -> str:
 
 
 def make_dataflow_graph_from_datahub(
-    datahub_class: Type[DataHub],
+    datahub_class: type[DataHub],
     *tables: EmptyDataNode,
     output: str | pathlib.Path | None = None,
     direction: Literal["TD", "LR"] = "TD",

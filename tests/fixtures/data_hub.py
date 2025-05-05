@@ -6,9 +6,7 @@ from pytred.decorators import polars_table
 
 
 class BasicDataHub(DataHub):
-
     def __init__(self):
-
         root_df = pl.DataFrame({"id": ["a", "b", "c"]})
 
         # inputs table
@@ -151,3 +149,13 @@ class ComplecatedDataHub(DataHub):
         Description of table3
         """
         ...
+
+
+class DataHubWithOptionalTable(DataHub):
+    @polars_table(0, "id", join="left")
+    def table1(self, table_in1):
+        return table_in1
+
+    @polars_table(0, "id", join="left", is_optional=True)
+    def table2(self, table_in2):
+        return table_in2

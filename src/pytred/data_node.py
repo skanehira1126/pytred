@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from dataclasses import field
 from typing import Literal
-from typing import Sequence
 
 import polars as pl
 
@@ -13,12 +13,13 @@ from pytred._types import POLARS_JOIN_METHOD
 @dataclass
 class EmptyDataNode:
     """
-    DataNode class to visualize dataflow
+    DataNode class to no processing node
     """
 
     name: str
     keys: Sequence[str] | None
     join: POLARS_JOIN_METHOD | None
+    is_optional: bool = False
 
 
 @dataclass

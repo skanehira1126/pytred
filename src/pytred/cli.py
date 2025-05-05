@@ -9,6 +9,7 @@ import pytred
 from pytred.data_node import EmptyDataNode
 from pytred.helpers import visualize
 
+
 logger = getLogger(__name__)
 
 

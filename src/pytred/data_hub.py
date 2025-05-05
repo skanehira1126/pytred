@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import inspect
+from collections.abc import Sequence
 from functools import reduce
+import inspect
 from logging import getLogger
 from operator import and_
 from typing import Literal
-from typing import Sequence
 
 import polars as pl
 
@@ -15,6 +15,8 @@ from pytred.data_node import DataflowNode
 from pytred.data_node import DataNode
 from pytred.data_node import EmptyDataNode
 from pytred.exceptions import TableNotFoundError
+from pytred.helpers.decorator import get_metadata
+
 
 logger = getLogger(__name__)
 
@@ -31,7 +33,8 @@ class DataHub:
         **named_tables: pl.DataFrame,
     ):
         """
-        Initializes the DataHub with a base DataFrame and optionally additional DataNodes or named DataFrames.
+        Initializes the DataHub with a base DataFrame and optionally additional DataNodes or
+        named DataFrames.
 
         Parameters
         ----------
@@ -136,7 +139,8 @@ class DataHub:
         It extracts the function names, their associated join methods, and their execution order.
 
         This method is used internally to prepare the data processing pipeline before execution,
-        ensuring that tables are created and joined in the correct order as defined by the annotations.
+        ensuring that tables are created and joined in the correct order as defined by the
+        annotations.
 
         Returns
         -------
@@ -153,17 +157,18 @@ class DataHub:
             function_name = member[0]
             function = member[1]
             # annotated function has table_process_order
-            if hasattr(function, "table_process_order"):
-                table_join_info[function_name] = function.join
-                table_order[function_name] = function.table_process_order
-                if function.keys is not None:
-                    table_join_keys[function_name] = function.keys
+            if pytred_meta := getattr(function, "__pytred_meta__", None):
+                table_join_info[function_name] = pytred_meta["join"]
+                table_order[function_name] = pytred_meta["table_process_order"]
+                if keys := pytred_meta.get("keys", None):
+                    table_join_keys[function_name] = keys
 
         return table_join_info, table_join_keys, table_order
 
     def __call__(self, *filters: pl.Expr) -> pl.DataFrame:
         """
-        Executes the data processing pipeline using the provided filter expressions as an alias to execute.
+        Executes the data processing pipeline using the provided filter expressions as an alias
+        to execute.
 
         Parameters
         ----------
@@ -179,7 +184,8 @@ class DataHub:
 
     def execute(self, *filters: pl.Expr) -> pl.DataFrame:
         """
-        Executes the data processing pipeline, including table creation, joins, and applying filter expressions.
+        Executes the data processing pipeline, including table creation, joins, and applying
+        filter expressions.
 
         Parameters
         ----------
@@ -191,9 +197,9 @@ class DataHub:
         pl.DataFrame
             The resulting DataFrame after applying the data processing pipeline and filters.
         """
-        # On calling execute(), annotated functions are executed to create each DataFrame as needed.
+        # On calling execute, annotated functions are executed to create each DataFrame as needed.
         # if self.table_functions is not None:
-        if self.table_order is not None and max([v for v in self.table_order.values()]) >= 0:
+        if self.table_order is not None and max(v for v in self.table_order.values()) >= 0:
             self.create_tables()
 
         # Validate to self.tables is not empty.
@@ -226,15 +232,15 @@ class DataHub:
         df = self.root_df.clone()
 
         for name, _ in sorted(self.table_order.items(), key=lambda x: x[1]):
-            table_info = self.tables[name]
-            if table_info.join is None:
+            table_node = self.tables[name]
+            if table_node.join is None or isinstance(table_node, EmptyDataNode):
                 # This is used only preprocessing.
                 continue
             df = df.join(
-                table_info.table,
-                on=table_info.keys,
-                how=table_info.join,
-                suffix=f"_{table_info.name}",
+                table_node.table,
+                on=table_node.keys,
+                how=table_node.join,
+                suffix=f"_{table_node.name}",
             )
         return df
 
@@ -242,7 +248,6 @@ class DataHub:
     def collect_table_and_arguments(
         cls, table_order: dict[str, int], include_input_table: bool = False
     ):
-
         list_table_order = cls.sort_tables_by_execute_order(table_order)
 
         for name, order in list_table_order:
@@ -255,7 +260,7 @@ class DataHub:
                 # get function arguments to check input tables
                 sig = inspect.signature(getattr(cls, name))
 
-                # Read arguments annotated with table information, executing past tables as arguments
+                # Read arguments annotated with table information
                 # Skip the first argument if it's declared as self or cls
                 for idx, arg_name in enumerate(sig.parameters.keys(), 1):
                     if idx == 1 and (arg_name == "self" or arg_name == "cls"):
@@ -270,19 +275,30 @@ class DataHub:
         Creates tables based on the annotated functions and their execution order.
         """
         for _, name, arg_table_names in self.collect_table_and_arguments(self.table_order):
-            # execute processing function
-            if len(arg_table_names):
-                table = getattr(self, name)(
-                    *[self.get(table_name).table for table_name in arg_table_names]
+            # data processing function
+            process_fn = getattr(self, name)
+
+            # Collect argument tables that do not exist
+            missing_tables = [t for t in arg_table_names if t not in self.tables]
+            if get_metadata(process_fn, "is_optional") and missing_tables:
+                logger.debug(
+                    f"Process '{name}' is skipped, because these tables are not found: "
+                    f"{missing_tables}"
+                )
+                self.tables[name] = EmptyDataNode(
+                    name=name,
+                    join=self.table_join_info[name],
+                    keys=self.table_join_keys.get(name),
+                    is_optional=True,
                 )
             else:
-                table = getattr(self, name)()
-            self.tables[name] = DataNode(
-                table,
-                self.table_join_keys.get(name),
-                join=self.table_join_info[name],
-                name=name,
-            )
+                table = process_fn(*[self.get(table_name).table for table_name in arg_table_names])
+                self.tables[name] = DataNode(
+                    table,
+                    self.table_join_keys.get(name),
+                    join=self.table_join_info[name],
+                    name=name,
+                )
 
     @classmethod
     def search_tables(cls, *input_tables: EmptyDataNode) -> list:
@@ -339,8 +355,8 @@ class DataHub:
             keys = None
         else:
             target_function = getattr(cls, name)
-            join_type = target_function.join  # type: ignore
-            keys = target_function.keys
+            join_type = get_metadata(target_function, "join")
+            keys = get_metadata(target_function, "keys")
             shape = "[]" if join_type is None else "([])"
 
         node = DataflowNode(
@@ -392,10 +408,10 @@ class DataHub:
         """
         try:
             return self.tables[table_name]
-        except KeyError:
+        except KeyError as err:
             raise KeyError(
                 f"table '{table_name}' is not found: Current table list {self.tables.keys()}."
-            )
+            ) from err
 
     @staticmethod
     def get_dataflow_graph(
@@ -404,9 +420,9 @@ class DataHub:
         """
         Get the hierarchical structure of data preprocessing nodes.
 
-        Given a list of ProcessingNode objects, which each have a name, level, and list of children,
+        Given a list of ProcessingNode objects, which each have a name, level, and children,
         this function creates a directed graph that visualizes the dependencies between the nodes.
-        Nodes at the same level are grouped together, and dependencies are shown with directed edges.
+        Nodes at the same level are grouped together, and dependencies are shown with edges.
 
         Parameters
         ----------

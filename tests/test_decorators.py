@@ -1,10 +1,11 @@
 import polars as pl
-import pytest
 from polars.testing import assert_frame_equal
+import pytest
 
 from pytred.decorators import polars_table
 from pytred.exceptions import DuplicatedError
 from pytred.exceptions import InvalidReturnValueError
+from pytred.helpers.decorator import get_metadata
 
 
 @pytest.fixture
@@ -32,7 +33,6 @@ def duplicate_df():
 
 
 class TestPolarsTable:
-
     def test__annotated_function_returns_same_df_and_keys(self, simple_df):
         @polars_table(0, "id", join="left")
         def prep_function():
@@ -42,11 +42,10 @@ class TestPolarsTable:
         expected_df = simple_df
 
         assert_frame_equal(actual_df, expected_df)
-        assert prep_function.keys == ("id",)
+        assert get_metadata(prep_function, "keys") == ("id",)
 
     @pytest.mark.parametrize("order", [1.5, "aaa", {"a": 2}, [1, 2, 3]])
     def test__raise_ValueError_when_order_is_not_integer(self, simple_df, order):
-
         with pytest.raises(ValueError):
 
             @polars_table(order, "id", join="inner")
@@ -57,7 +56,6 @@ class TestPolarsTable:
     def test__raise_ValueError_when_keys_and_join_are_invalid_combination(
         self, keys, join, simple_df
     ):
-
         with pytest.raises(ValueError):
 
             @polars_table(0, *keys, join=join)
@@ -65,7 +63,6 @@ class TestPolarsTable:
                 return simple_df
 
     def test__raise_DuplicatedError_when_dataframe_has_duplicated_values(self, duplicate_df):
-
         @polars_table(0, "id", join="inner")
         def prep_function():
             return duplicate_df
@@ -74,7 +71,6 @@ class TestPolarsTable:
             prep_function()
 
     def test__not_validate_unique_values(self, duplicate_df):
-
         @polars_table(0, "id", join="inner", is_validate_unique=False)
         def prep_function():
             return duplicate_df
@@ -83,10 +79,9 @@ class TestPolarsTable:
         expected_df = duplicate_df
 
         assert_frame_equal(actual_df, expected_df)
-        assert prep_function.keys == ("id",)
+        assert get_metadata(prep_function, "keys") == ("id",)
 
     def test__without_keys(self, simple_df):
-
         @polars_table(0)
         def prep_function():
             return simple_df
@@ -95,11 +90,10 @@ class TestPolarsTable:
         expected_df = simple_df
 
         assert_frame_equal(actual_df, expected_df)
-        assert prep_function.keys is None
+        assert get_metadata(prep_function, "keys") is None
 
     @pytest.mark.parametrize("return_value", [1.5, "aaa", {"a": 2}, [1, 2, 3]])
     def test__raise_ValueError_function_done_not_return_dataframe(self, return_value):
-
         @polars_table(0, "id", join="inner")
         def prep_function():
             return return_value
@@ -124,8 +118,8 @@ class TestPolarsTable:
         def prep_function():
             return simple_df
 
-        assert prep_function.table_process_order == expected[0]
-        assert prep_function.join == expected[2]
+        assert get_metadata(prep_function, "table_process_order") == expected[0]
+        assert get_metadata(prep_function, "join") == expected[2]
 
     def test__raise_ValueError_order_is_less_than_0(self, simple_df):
         with pytest.raises(ValueError):

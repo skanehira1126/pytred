@@ -6,9 +6,14 @@ from pytred import DataNode
 from pytred.data_node import DataflowNode
 from pytred.exceptions import TableNotFoundError
 
+from .fixtures.data_hub import DataHubWithOptionalTable
+
 
 def test__initialize():
-    """Test initialization of the DataHub with a base DataFrame and additional DataNodes or named DataFrames."""
+    """
+    Test initialization of the DataHub with a base DataFrame and additional DataNodes
+    or named DataFrames.
+    """
     root_df = pl.DataFrame({"id": ["a", "b", "c", "d"]})
 
     # inputs tables
@@ -28,7 +33,8 @@ def test__initialize():
         table1,
         table2=table2,
     )
-    # verify ll tables (positional and keyword arguments) are correctly registered within the DataHub instance.
+    # verify ll tables (positional and keyword arguments) are correctly registered
+    # within the DataHub instance.
     actual = datahub.tables
     expected = {
         "table1": table1,
@@ -110,6 +116,37 @@ def test__basic_process(basic_datahub):
     assert basic_datahub.actual_called_order == basic_datahub.expected_called_order
     # check result dataframe
     assert actual_result.equals(basic_datahub.expected_result_table)
+
+
+def test__optional_datahub_with_table():
+    """
+    Test the optional processing pipeline in DataHub
+    """
+    dh = DataHubWithOptionalTable(
+        root_df=pl.DataFrame({"id": ["a", "b", "c"]}),
+        table_in1=pl.DataFrame({"id": ["a", "b", "c"], "table_in1": [1, 1, 1]}),
+        table_in2=pl.DataFrame({"id": ["a", "b", "c"], "table_in2": [1, 1, 1]}),
+    )
+
+    output = dh()
+
+    assert "table_in1" in output.columns
+    assert "table_in2" in output.columns
+
+
+def test__optional_datahub_without_table():
+    """
+    Test the optional processing pipeline in DataHub
+    """
+    dh = DataHubWithOptionalTable(
+        root_df=pl.DataFrame({"id": ["a", "b", "c"]}),
+        table_in1=pl.DataFrame({"id": ["a", "b", "c"], "table_in1": [1, 1, 1]}),
+    )
+
+    output = dh()
+
+    assert "table_in1" in output.columns
+    assert "table_in2" not in output.columns
 
 
 def test__raise_RuntimeError_no_tables():
