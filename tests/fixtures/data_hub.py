@@ -159,3 +159,7 @@ class DataHubWithOptionalTable(DataHub):
     @polars_table(0, "id", join="left", is_optional=True)
     def table2(self, table_in2):
         return table_in2
+
+    @polars_table(1, "id", join="left", is_optional=True)
+    def table2_2(self, table2):
+        return table2

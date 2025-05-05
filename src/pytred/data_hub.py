@@ -279,7 +279,11 @@ class DataHub:
             process_fn = getattr(self, name)
 
             # Collect argument tables that do not exist
-            missing_tables = [t for t in arg_table_names if t not in self.tables]
+            missing_tables = [
+                t
+                for t in arg_table_names
+                if t not in self.tables or isinstance(self.tables[t], EmptyDataNode)
+            ]
             if get_metadata(process_fn, "is_optional") and missing_tables:
                 logger.debug(
                     f"Process '{name}' is skipped, because these tables are not found: "
