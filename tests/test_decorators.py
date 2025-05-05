@@ -1,6 +1,6 @@
 import polars as pl
-import pytest
 from polars.testing import assert_frame_equal
+import pytest
 
 from pytred.decorators import polars_table
 from pytred.exceptions import DuplicatedError

@@ -1,13 +1,12 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from dataclasses import field
 import pathlib
 import subprocess
 import sys
 import tempfile
-from dataclasses import dataclass
-from dataclasses import field
 from typing import Literal
-from typing import Type
 
 from pytred.data_hub import DataHub
 from pytred.data_node import DataEdge
@@ -54,7 +53,7 @@ TEMPLATE = """## {datahub_name}
 ROW_TAMPLATE = "| {order} | {name} | {table_type} | {join} | {keys} | {description} |"
 
 
-def report_datahub(datahub_class: Type[DataHub], *tables: EmptyDataNode) -> str:
+def report_datahub(datahub_class: type[DataHub], *tables: EmptyDataNode) -> str:
     """
     Make report of datahub with markdown format.
     This report has contents below.
@@ -116,7 +115,7 @@ def report_datahub(datahub_class: Type[DataHub], *tables: EmptyDataNode) -> str:
 
 
 def make_dataflow_graph_from_datahub(
-    datahub_class: Type[DataHub],
+    datahub_class: type[DataHub],
     *tables: EmptyDataNode,
     output: str | pathlib.Path = "./dataflow.png",
     direction: Literal["TD", "LR"] = "TD",
@@ -177,7 +176,6 @@ def make_dataflow_graph(
 
     level_map: dict[int, list[DataflowNode]] = {}
     for _node in sorted(nodes, key=lambda x: x.level):
-
         # for manegement of node position
         if _node.level not in level_map.keys():
             level_map[_node.level] = []

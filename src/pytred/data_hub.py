@@ -1,16 +1,17 @@
 from __future__ import annotations
 
-import inspect
+from collections.abc import Sequence
 from functools import reduce
+import inspect
 from logging import getLogger
 from operator import and_
-from typing import Sequence
 
 import polars as pl
 
 from pytred.data_node import DataNode
 from pytred.data_node import EmptyDataNode
 from pytred.exceptions import TableNotFoundError
+
 
 logger = getLogger(__name__)
 
@@ -27,7 +28,8 @@ class DataHub:
         **named_tables: pl.DataFrame,
     ):
         """
-        Initializes the DataHub with a base DataFrame and optionally additional DataNodes or named DataFrames.
+        Initializes the DataHub with a base DataFrame and optionally additional DataNodes or
+        named DataFrames.
 
         Parameters
         ----------
@@ -132,7 +134,8 @@ class DataHub:
         It extracts the function names, their associated join methods, and their execution order.
 
         This method is used internally to prepare the data processing pipeline before execution,
-        ensuring that tables are created and joined in the correct order as defined by the annotations.
+        ensuring that tables are created and joined in the correct order as defined by the
+        annotations.
 
         Returns
         -------
@@ -159,7 +162,8 @@ class DataHub:
 
     def __call__(self, *filters: pl.Expr) -> pl.DataFrame:
         """
-        Executes the data processing pipeline using the provided filter expressions as an alias to execute.
+        Executes the data processing pipeline using the provided filter expressions as an alias
+        to execute.
 
         Parameters
         ----------
@@ -175,7 +179,8 @@ class DataHub:
 
     def execute(self, *filters: pl.Expr) -> pl.DataFrame:
         """
-        Executes the data processing pipeline, including table creation, joins, and applying filter expressions.
+        Executes the data processing pipeline, including table creation, joins, and applying
+        filter expressions.
 
         Parameters
         ----------
@@ -187,9 +192,9 @@ class DataHub:
         pl.DataFrame
             The resulting DataFrame after applying the data processing pipeline and filters.
         """
-        # On calling execute(), annotated functions are executed to create each DataFrame as needed.
+        # On calling execute, annotated functions are executed to create each DataFrame as needed.
         # if self.table_functions is not None:
-        if self.table_order is not None and max([v for v in self.table_order.values()]) >= 0:
+        if self.table_order is not None and max(v for v in self.table_order.values()) >= 0:
             self.create_tables()
 
         # Validate to self.tables is not empty.
@@ -235,7 +240,6 @@ class DataHub:
         return df
 
     def collect_table_and_arguments(self, table_order: dict):
-
         list_table_order = self.make_list_table_order(table_order)
 
         for name, order in list_table_order:
@@ -300,7 +304,10 @@ class DataHub:
             for data_node in input_tables
         ]
 
-        for order, name, arg_table_names in cls.collect_table_and_arguments(cls, cls.registerd_tables_order):  # type: ignore
+        for order, name, arg_table_names in cls.collect_table_and_arguments(
+            cls,  # type: ignore
+            cls.registerd_tables_order,  # type: ignore
+        ):
             # get function arguments to check input tables
             logger.info(f"target table name: {name}")
 
@@ -366,7 +373,7 @@ class DataHub:
         """
         try:
             return self.tables[table_name]
-        except KeyError:
+        except KeyError as err:
             raise KeyError(
                 f"table '{table_name}' is not found: Current table list {self.tables.keys()}."
-            )
+            ) from err

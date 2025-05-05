@@ -1,6 +1,6 @@
-import pathlib
 from logging import INFO
 from logging import getLogger
+import pathlib
 
 import polars as pl
 import pytest
