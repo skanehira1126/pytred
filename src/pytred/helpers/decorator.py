@@ -2,7 +2,7 @@ from typing import Callable
 from typing import Literal
 
 
-META_KEYS = Literal["table_process_order", "join", "keys"]
+META_KEYS = Literal["table_process_order", "join", "keys", "is_optional"]
 
 
 def get_metadata(target: Callable, key: META_KEYS):

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import partial
 from functools import wraps
 from logging import getLogger
 from typing import Callable
@@ -32,11 +33,13 @@ def _set_metadata_to_function(
     order: int,
     join: POLARS_JOIN_METHOD | None,
     keys: tuple[str, ...],
+    is_optional: bool,
 ):
     wrapper.__pytred_meta__ = {
         "table_process_order": order,
         "join": join,
         "keys": None if (len(keys) == 0 or keys[0] is None) else keys,
+        "is_optional": is_optional,
     }
 
     return wrapper
@@ -69,6 +72,8 @@ def polars_table(
     is_validate_unique : bool, default True
         Whether to validate the uniqueness of the specified keys in the DataFrame returned by the
         function. If True, a check for duplicate entries based on the keys is performed.
+    is_optional: bool, default False
+        If True, do not execute if input table does not exist
 
     Raises
     ------
@@ -130,8 +135,12 @@ def polars_table(
             order=order,
             join=join,
             keys=keys,
+            is_optional=is_optional,
         )
 
         return _wrapper
 
     return decorator
+
+
+polars_optional_table = partial(polars_table, is_optional=True)

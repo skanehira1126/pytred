@@ -12,12 +12,13 @@ from pytred._types import POLARS_JOIN_METHOD
 @dataclass
 class EmptyDataNode:
     """
-    DataNode class to visualize dataflow
+    DataNode class to no processing node
     """
 
     name: str
     keys: Sequence[str] | None
     join: POLARS_JOIN_METHOD | None
+    is_optional: bool = False
 
 
 @dataclass

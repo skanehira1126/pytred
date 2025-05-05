@@ -228,15 +228,15 @@ class DataHub:
         df = self.root_df.clone()
 
         for name, _ in sorted(self.table_order.items(), key=lambda x: x[1]):
-            table_info = self.tables[name]
-            if table_info.join is None:
+            table_node = self.tables[name]
+            if table_node.join is None or isinstance(table_node, EmptyDataNode):
                 # This is used only preprocessing.
                 continue
             df = df.join(
-                table_info.table,
-                on=table_info.keys,
-                how=table_info.join,
-                suffix=f"_{table_info.name}",
+                table_node.table,
+                on=table_node.keys,
+                how=table_node.join,
+                suffix=f"_{table_node.name}",
             )
         return df
 
@@ -265,19 +265,30 @@ class DataHub:
         Creates tables based on the annotated functions and their execution order.
         """
         for _, name, arg_table_names in self.collect_table_and_arguments(self.table_order):
-            # execute processing function
-            if len(arg_table_names):
-                table = getattr(self, name)(
-                    *[self.get(table_name).table for table_name in arg_table_names]
+            # data processing function
+            process_fn = getattr(self, name)
+
+            # Collect argument tables that do not exist
+            missing_tables = [t for t in arg_table_names if t not in self.tables]
+            if get_metadata(process_fn, "is_optional") and missing_tables:
+                logger.debug(
+                    f"Process '{name}' is skipped, because these tables are not found: "
+                    f"{missing_tables}"
+                )
+                self.tables[name] = EmptyDataNode(
+                    name=name,
+                    join=self.table_join_info[name],
+                    keys=self.table_join_keys.get(name),
+                    is_optional=True,
                 )
             else:
-                table = getattr(self, name)()
-            self.tables[name] = DataNode(
-                table,
-                self.table_join_keys.get(name),
-                join=self.table_join_info[name],
-                name=name,
-            )
+                table = process_fn(*[self.get(table_name).table for table_name in arg_table_names])
+                self.tables[name] = DataNode(
+                    table,
+                    self.table_join_keys.get(name),
+                    join=self.table_join_info[name],
+                    name=name,
+                )
 
     @classmethod
     def search_tables(cls, *input_tables: EmptyDataNode) -> list:
