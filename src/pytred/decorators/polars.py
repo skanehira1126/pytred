@@ -27,11 +27,27 @@ def _validate_signature(order: int, keys: tuple[str, ...], join: POLARS_JOIN_MET
         raise ValueError(f"When 'join' is {join}, keys must not be empty.")
 
 
+def _set_metadata_to_function(
+    wrapper,
+    order: int,
+    join: POLARS_JOIN_METHOD | None,
+    keys: tuple[str, ...],
+):
+    wrapper.__pytred_meta__ = {
+        "table_process_order": order,
+        "join": join,
+        "keys": None if (len(keys) == 0 or keys[0] is None) else keys,
+    }
+
+    return wrapper
+
+
 def polars_table(
     order: int,
     *keys: str,
     join: POLARS_JOIN_METHOD | None = None,
     is_validate_unique: bool = True,
+    is_optional: bool = False,
 ):
     """
     Decorator class for adding metadata to data processing functions, specifying their order of
@@ -109,12 +125,12 @@ def polars_table(
                         )
             return df
 
-        _wrapper.table_process_order = order  # type: ignore
-        _wrapper.join = join  # type: ignore
-        if len(keys) == 0 or keys[0] is None:
-            _wrapper.keys = None  # type: ignore
-        else:
-            _wrapper.keys = keys  # type: ignore
+        _wrapper = _set_metadata_to_function(
+            _wrapper,
+            order=order,
+            join=join,
+            keys=keys,
+        )
 
         return _wrapper
 

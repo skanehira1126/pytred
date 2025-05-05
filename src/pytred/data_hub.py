@@ -11,6 +11,7 @@ import polars as pl
 from pytred.data_node import DataNode
 from pytred.data_node import EmptyDataNode
 from pytred.exceptions import TableNotFoundError
+from pytred.helpers.decorator import get_metadata
 
 
 logger = getLogger(__name__)
@@ -152,11 +153,11 @@ class DataHub:
             function_name = member[0]
             function = member[1]
             # annotated function has table_process_order
-            if hasattr(function, "table_process_order"):
-                table_join_info[function_name] = function.join
-                table_order[function_name] = function.table_process_order
-                if function.keys is not None:
-                    table_join_keys[function_name] = function.keys
+            if pytred_meta := getattr(function, "__pytred_meta__", None):
+                table_join_info[function_name] = pytred_meta["join"]
+                table_order[function_name] = pytred_meta["table_process_order"]
+                if keys := pytred_meta.get("keys", None):
+                    table_join_keys[function_name] = keys
 
         return table_join_info, table_join_keys, table_order
 
@@ -311,7 +312,7 @@ class DataHub:
             # get function arguments to check input tables
             logger.info(f"target table name: {name}")
 
-            join_type = getattr(cls, name).join  # type: ignore
+            join_type = get_metadata(getattr(cls, name), "join")  # type: ignore
             if join_type is None:  # type: ignore
                 shape = "[]"
             else:
