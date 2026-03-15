@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pytred Usage"
+  short_description: "Explain pytred DataHub, DataNode, and CLI usage."
+  default_prompt: "Use $pytred-usage to explain how to use pytred in this repository, including DataHub design, decorators, inputs, execution, and CLI reporting."
