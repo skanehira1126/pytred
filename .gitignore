@@ -163,3 +163,4 @@ cython_debug/
 .python-version
 requirements.lock
 requirements-dev.lock
+/.refinery.local.yaml
