@@ -17,3 +17,19 @@ Iht facilitates a structured approach to data operations, allowing each function
 1. [Preprocessing with completed data](./examples/02_use_completed_data.ipynb)
 1. [visualize workflow](./examples/03_visualize_workflow.ipynb)
 
+## AI agent skill
+
+This repository includes a concise Codex skill that teaches AI agents how to use
+`DataHub`, `DataNode`, `@polars_table`, and the `pytred report` CLI without relying
+on generic data-pipeline assumptions.
+
+Codex discovers the skill automatically when working in this repository. To make
+it available from other projects, install it from GitHub:
+
+```bash
+python ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py \
+  --repo skanehira1126/pytred \
+  --path .codex/skills/pytred-usage
+```
+
+The `pytred-usage` skill will be available to Codex from the next turn.
