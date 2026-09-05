@@ -1,28 +1,36 @@
+# pytred の開発ガイド
+
+このファイルはリポジトリ全体の開発方針を扱う。パッケージの使い方は
+`plugins/pytred/skills/pytred-usage/SKILL.md` にまとめる。
+対象に適用される下位ディレクトリの指示がある場合は、その固有ルールを優先する。
+
+## 作業と報告
+
+- 明示された依頼を優先し、スキルの一般的な推奨から追加の承認手順を作らない。既存コードで判断できる細部は調べて進め、結果を左右する未確定の要件だけ確認する。
+- 指示を理由に作業を止める場合は、根拠のファイルと該当箇所、影響する作業を示す。独立して進められる作業は続ける。
+- レビューで発見した問題のレポートは必ず日本語で記載する。問題の場所、発生条件、影響を具体的に示す。
+- 完了報告は変更点と検証結果を簡潔に伝える。未実施の確認は実施済みの結果と区別する。
+
+## 実装と検証
+
+- 実装は `src/pytred/`、テストは `tests/`、利用例は `examples/` と `docs/tutorials/` を参照する。
+- Pythonの対応範囲・依存関係は `pyproject.toml`、検証コマンドは `tox.ini` と `.github/workflows/` を根拠にする。
+- 挙動を変える場合は対応する公開APIと既存テストを確認し、必要な回帰テストと利用説明を更新する。
+- 既存環境の `python -m pytest tests/<対象ファイル>.py` などで変更に関係する挙動を確認する。全体の互換性・静的検査が必要な変更では `tox.ini` の該当環境を使う。
+- 文書・スキルだけの変更は内容、参照先、変更した実行例、利用可能なスキル・プラグイン検証器を確認する。関連する確認が通った後は、新しい失敗や未解決の懸念がなければ検証を広げない。
+
+## スキルの保守
+
+- `pytred-usage` の編集元は `plugins/pytred/skills/pytred-usage/`。`.agents/skills/pytred-usage` と `.codex/skills/pytred-usage` は同じ編集元へのリンクとして扱う。
+- リポジトリ固有の開発・Knowledge Refineryルールはここで管理する。配布スキルは利用先のプロジェクトでも使えるよう、同梱ガイドと利用先のpytred環境を根拠にする。
+- 適用条件は `description`、作業の進め方は `SKILL.md`、APIの詳細と例は `references/` に置き、同じ説明を複数箇所で維持しない。
+
 <!-- knowledge-refinery:agents:start lang=jp -->
 ## Knowledge Refinery
 
-このリポジトリでは、開発中に得た再利用可能な経験をKnowledge Refineryで管理する。
-
-- `.refinery.yaml` が `enabled: true` の場合だけ利用し、repo-scoped MCP toolsには現在repoの絶対パスを `project_path` として渡す。
-- statusの`vault_match`がtrueの場合だけrepo-scoped toolsを使う。不一致時は停止してactive vaultを報告し、`vault_id`を手編集して回避しない。
-- `enabled: false` は意図的なOFFとして扱い、検索や記録の依頼だけを理由に再有効化しない。再有効化は利用者の明示依頼または確認がある場合だけ行う。
-- 設定を修復するときは、存在する `refinery-project` skillと文書化されたCLIだけを使い、存在しないrepair skillやcommandを案内しない。
-- projectの名前、概要、検索用tag、主要技術が変わった場合は、現在revisionを取得して中央vaultのproject metadataを部分更新する。目的・領域のtagはlowercase kebab-case、技術名はtechnologiesだけに保存する。
-- 作業開始時は、現在project memoryとshared memory、現在project experienceの順に検索する。足りない場合だけ、`project_ids`で選んだproject、さらに必要な場合だけ`all_projects: true`へ広げる。`project_ids`と`all_projects: true`は併用しない。
-- meaningfulな検証、比較、不採用判断、失敗から知見を得た場合は `refinery-experience` skillを使う。
-- 将来のagentの選択、回避、検証、診断を変える結果だけをexperienceにし、定型作業の完了報告、進捗log、明白なtypo修正、新しい根拠のない反復は記録しない。
-- experienceは目的、試したこと、分かったこと、微妙だった点、次の可能性を一つの記録にまとめる。
-- statusは、評価可能な結果なら成否を問わず`completed`、根拠不足や矛盾で答えが出ないなら`inconclusive`、評価前に停止したなら`abandoned`、後続experienceが結論を置換した場合だけ`superseded`とする。
-- confidenceは、条件を明記した再現可能な直接根拠なら`high`、直接根拠はあるが反復や適用範囲が限定的なら`medium`、部分的・間接的な根拠または重要な未解決点があるなら`low`とする。
-- 新規experienceは安定したlowercase slugの`experience_id`を先に決める。結果不明のcreateをretryする前にexact getまたはID検索で保存済みか確認する。
-- 既存experience/memoryの更新は現在revisionを使う。optional fieldの省略は保持、空listは明示clear、confidenceのclearは`clear_confidence: true`とする。
-- 実装へ採用しなかったことや、evidenceがuntrackedであることを理由に記録を捨てない。
-- evidenceを保存するためだけにプロダクトrepoへcommitしない。
-- 複数experienceから繰り返し使える原則を抽出するときは `refinery-memory` skillを使う。
-- project memoryは原則として反復または相補的な2件以上のexperienceを根拠にする。利用者が明示依頼した場合だけ1件を許し、scopeを狭め、未検証の限界を本文へ書き、confidenceを`high`にしない。
-- shared memoryは異なる2 project以上の独立した根拠があっても自動作成しない。候補の原則、scope、限界、反例、confidence、source IDを提示し、利用者の明示承認後だけ作成・昇格する。
-- secret、credential、access token、PII（個人情報）、顧客data、redactしていない機密logをvaultへ保存しない。logやevidenceは機密値を除去し、安全にできない場合は非機密の説明と限界だけを残す。
-- 作業終了前に、今回の作業から記録すべきexperienceがないか確認する。
-- 日次棚卸しでは `refinery-maintenance` skillを使う。
-- プロダクトrepoとrefinery repoの変更を同じcommitやPRへ混ぜない。
+- `.refinery.yaml` が `enabled: true` の場合だけ利用する。OFFを検索・記録の依頼だけで再有効化しない。
+- 利用前に `knowledge-refinery project status --target <このrepoの絶対パス> --json` を確認し、`ready`・`enabled`・`vault_match` がすべてtrueの場合だけrepo-scoped toolsを使う。`project_path` には同じ絶対パスを渡す。
+- vault不一致時はKnowledge Refineryの操作を止め、active vaultを報告する。`vault_id` の手編集で回避しない。
+- 開発作業の開始時は [運用手順の「検索と設定」](docs/development/knowledge-refinery.md#検索と設定) に沿ってcurrent project/shared memory、current project experienceの順で検索する。
+- 作業終了前に再利用できる発見があったか確認する。記録・更新・保守を行うときは [運用手順](docs/development/knowledge-refinery.md) の該当節と対応するスキルを読む。
 <!-- knowledge-refinery:agents:end -->
