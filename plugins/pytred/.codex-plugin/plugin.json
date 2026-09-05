@@ -1,0 +1,22 @@
+{
+  "name": "pytred",
+  "version": "0.1.0",
+  "description": "Build and explain pytred preprocessing pipelines with DataHub, DataNode, and polars_table.",
+  "author": {
+    "name": "Shinichi Kanehira"
+  },
+  "homepage": "https://github.com/skanehira1126/pytred",
+  "repository": "https://github.com/skanehira1126/pytred",
+  "license": "Apache-2.0",
+  "keywords": ["pytred", "python", "polars", "preprocessing"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "pytred",
+    "shortDescription": "Build and inspect pytred preprocessing pipelines.",
+    "longDescription": "Use pytred DataHub, DataNode, and polars_table to compose preprocessing pipelines, inspect notebook workflows, and generate CLI reports.",
+    "developerName": "Shinichi Kanehira",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": ["Help me build a pytred preprocessing pipeline.", "Explain how to join existing tables with DataNode.", "Help me visualize and report a pytred workflow."]
+  }
+}

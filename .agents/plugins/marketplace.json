@@ -1,0 +1,20 @@
+{
+  "name": "pytred",
+  "interface": {
+    "displayName": "Pytred"
+  },
+  "plugins": [
+    {
+      "name": "pytred",
+      "source": {
+        "source": "local",
+        "path": "./plugins/pytred"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

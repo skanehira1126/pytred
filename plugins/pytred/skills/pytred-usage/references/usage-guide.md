@@ -2,19 +2,24 @@
 
 ## Core Model
 
-- `DataHub` executes tables in dependency order, joins selected tables into `root_df`, and returns a `polars.DataFrame`.
+- `DataHub` executes decorated methods in ascending `@polars_table(order, ...)` order, joins selected tables into `root_df`, and returns a `polars.DataFrame`. Give a producing method a lower order than its consumers; dependencies do not automatically reorder methods.
 - A `@polars_table(...)` method defines one table in the pipeline. The method name becomes that table's name.
 - Method parameter names are table dependencies. They can refer to:
   - keyword input tables passed into `DataHub(...)`
   - positional `DataNode` inputs
   - outputs of earlier decorated methods
 - `root_df` is the output backbone. Any table with a non-`None` `join` is joined into `root_df`.
+- Positional `DataNode` inputs are already computed tables. When supplying them, pass `root_df` as the first positional argument: `DataHub(root_df, node_a, node_b)`.
+- Keyword `pl.DataFrame` inputs are named dependencies with `join=None`; they do not automatically join into the result.
 - `join=None` means "build this table for downstream steps only." It is available to later methods but does not appear in the final output unless another joined table selects from it.
+- `is_optional=True` skips a decorated method if a required table is missing or was skipped. It does not suppress errors from a method that runs.
 - `hub()` and `hub.execute()` are equivalent. Passing `pl.Expr` filters applies them after all joins and `post_step()`.
 
 ## Build a Reusable Pipeline Class
 
 Use a `DataHub` subclass when the preprocessing steps should be reusable and dependency-aware.
+
+This snippet assumes an existing `titanic` DataFrame with `record_id`, `survived`, `sex`, `sibsp`, `parch`, and `age` columns, and unique `record_id` values.
 
 ```python
 import polars as pl
@@ -89,6 +94,8 @@ Important details:
 
 Use plain `DataHub(...)` plus positional `DataNode` objects when the feature tables already exist and only need to be joined.
 
+This snippet assumes existing `titanic`, `replaced_sex`, and `filled_age` DataFrames sharing the `record_id` key.
+
 ```python
 import polars as pl
 
@@ -97,7 +104,7 @@ from pytred import DataNode
 
 
 hub = DataHub(
-    root_df=titanic.select("record_id"),
+    titanic.select("record_id"),
     DataNode(
         table=replaced_sex,
         keys=["record_id"],
@@ -127,7 +134,7 @@ Guidance:
 - `@polars_table` enforces that the decorated function returns `pl.DataFrame`.
 - If `join` is not `None`, the declared key columns must exist in the returned DataFrame.
 - Duplicate key rows raise `DuplicatedError` unless `is_validate_unique=False`.
-- With the current codebase, practical join values are `inner`, `left`, `right`, `full`, `semi`, `anti`, `cross`, and `None`.
+- Join names are passed to Polars. Check the project's installed Polars version for version-sensitive choices such as `full`/`outer` or `right`.
 - `cross` and `None` should not declare keys.
 - Instantiating `DataHub` with no tables raises `TableNotFoundError`.
 
@@ -162,15 +169,9 @@ Notes:
 - Each `--input-table` is JSON with `name` and optional `keys` and `join`.
 - The report includes the class docstring, method docstrings, a markdown table, and a Mermaid graph.
 
-## Answering Guidance
-
-- Prefer examples that mirror `tests/fixtures/data_hub.py` and the notebooks in `examples/`.
-- Explain the table-name matching rule explicitly. It is the main source of confusion for new users.
-- Call out the difference between "input table", "intermediate table", and "joined output table".
-- If the user asks why a column is missing from the final result, first check whether that table used `join=None`.
-- If the user asks why a step did not run, check `is_optional=True` and whether the required input table names were actually provided.
-
 ## Source Map
+
+These paths belong to the [pytred source repository](https://github.com/skanehira1126/pytred), not the plugin installation or the user's project. They are optional references when that checkout is available. For version-specific behavior in another project, inspect its installed pytred package.
 
 - `src/pytred/data_hub.py`: execution order, table creation, joining, `post_step()`, and filters.
 - `src/pytred/decorators/polars.py`: decorator contract and validation rules.

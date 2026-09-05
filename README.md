@@ -17,19 +17,46 @@ Iht facilitates a structured approach to data operations, allowing each function
 1. [Preprocessing with completed data](./examples/02_use_completed_data.ipynb)
 1. [visualize workflow](./examples/03_visualize_workflow.ipynb)
 
-## AI agent skill
+## Codex plugin
 
-This repository includes a concise Codex skill that teaches AI agents how to use
+This repository includes a Codex plugin that teaches AI agents how to use
 `DataHub`, `DataNode`, `@polars_table`, and the `pytred report` CLI without relying
 on generic data-pipeline assumptions.
 
-Codex discovers the skill automatically when working in this repository. To make
-it available from other projects, install it from GitHub:
+Install the Python package in your project's environment as usual:
 
 ```bash
-python ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py \
-  --repo skanehira1126/pytred \
-  --path .codex/skills/pytred-usage
+pip install pytred
 ```
 
-The `pytred-usage` skill will be available to Codex from the next turn.
+Install the Codex plugin separately from the repository marketplace:
+
+```bash
+codex plugin marketplace add skanehira1126/pytred
+codex plugin add pytred@pytred
+```
+
+To use a local checkout as the marketplace source, run from the repository root:
+
+```bash
+codex plugin marketplace add .
+codex plugin add pytred@pytred
+```
+
+These commands register the marketplace and plugin in your Codex environment;
+running them inside a repository does not limit the installation to that repository.
+For use only in a particular repository, place the `pytred-usage` skill folder under
+that repository's `.agents/skills/` instead.
+
+Start a new Codex task after installation and select `pytred-usage`, or ask for help
+with a pytred pipeline. The plugin includes its own usage guide and does not require
+a pytred source checkout. It does not install Python dependencies; `pip install`
+does not register the Codex plugin.
+
+The plugin lives in `plugins/pytred`, with its own version in
+`plugins/pytred/.codex-plugin/plugin.json`. The repository marketplace is defined in
+`.agents/plugins/marketplace.json`. Repository skill links in `.agents/skills` and
+`.codex/skills` point to the same plugin skill, so edit only
+`plugins/pytred/skills/pytred-usage`. If you previously installed the standalone
+skill into your user skill directory, remove that old copy when switching to the
+plugin to avoid duplicate skills.

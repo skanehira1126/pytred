@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pytred Usage"
+  short_description: "Explain pytred DataHub, DataNode, and CLI usage."
+  default_prompt: "Use $pytred-usage to help build and inspect a pytred preprocessing pipeline in my project."
