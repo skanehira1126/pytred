@@ -31,7 +31,7 @@ from pytred.decorators import polars_table
 class PassengerFeatures(DataHub):
     """Join reusable passenger features onto a root passenger table."""
 
-    @polars_table(0, "record_id", join="left")
+    @polars_table(0)
     def replace_sex(self, titanic: pl.DataFrame) -> pl.DataFrame:
         """Encode `sex` as an integer feature."""
         return titanic.select(
@@ -82,11 +82,13 @@ hub = PassengerFeatures(
 output = hub(pl.col("survived") == 1)
 ```
 
+With the inputs above, `output` contains surviving passengers (`survived == 1`), sorted by `record_id`, with columns in this order: `record_id`, `survived`, `filled_age`, `sex_replaced`, `cnt_family`.
+
 Important details:
 
 - The keyword argument `titanic=...` creates an input table named `titanic`, so the `replace_sex()` and `family_features()` parameters must also be named `titanic`.
 - The keyword argument `ages=...` is available to `filled_age()` because the parameter name matches the table name.
-- `family_features()` is intermediate because it uses `@polars_table(1)` with no join information.
+- `replace_sex()` and `family_features()` are intermediate tables because their decorators have no join information. Their features join the output once through `selected_features()`.
 - `is_optional=True` skips `filled_age()` when `ages` is not provided.
 - `post_step()` runs after all joins and before any filters passed to `hub(...)`.
 

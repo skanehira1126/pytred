@@ -1,6 +1,6 @@
 ---
 name: pytred-usage
-description: Build, explain, or debug pytred preprocessing pipelines with DataHub, DataNode, and @polars_table. Use for table dependencies, joins, optional steps, post_step filters, notebook visualization, and pytred report. Excludes generic Polars work without pytred and Codex plugin installation.
+description: Build, explain, or debug pytred pipelines with DataHub, DataNode, and @polars_table, including notebook visualization and CLI reports. Excludes generic Polars work without pytred and Codex plugin installation.
 ---
 
 # Pytred Usage
