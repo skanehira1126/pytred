@@ -1,242 +1,96 @@
 import polars as pl
+from polars.testing import assert_frame_equal
 import pytest
 
 from pytred import DataHub
 from pytred import DataNode
-from pytred.data_node import DataflowNode
+from pytred.data_node import EmptyDataNode
 from pytred.exceptions import TableNotFoundError
 
-from .fixtures.data_hub import DataHubWithOptionalTable
+from .fixtures.data_hub import BranchingHub
+from .fixtures.data_hub import OptionalHub
 
 
-def test__initialize():
-    """
-    Test initialization of the DataHub with a base DataFrame and additional DataNodes
-    or named DataFrames.
-    """
-    root_df = pl.DataFrame({"id": ["a", "b", "c", "d"]})
-
-    # inputs tables
-    # for positional arguments
-    table1 = DataNode(
-        pl.DataFrame({"id": ["a", "b", "c", "d", "e"], "table1": [1, 1, 1, 1, 1]}),
-        join="left",
-        keys=["id"],
-        name="table1",
+@pytest.fixture
+def hub():
+    return BranchingHub(
+        pl.DataFrame({"id": [1, 2, 3, 4]}),
+        source=pl.DataFrame({"id": [1, 2, 3], "value": [1, 2, 3]}),
     )
 
-    # for keyward arguments
-    table2 = pl.DataFrame({"id": ["a", "b", "c", "d", "e"], "table2": [2, 2, 2, 2, 2]})
 
-    datahub = DataHub(
-        root_df,
-        table1,
-        table2=table2,
-    )
-    # verify ll tables (positional and keyword arguments) are correctly registered
-    # within the DataHub instance.
-    actual = datahub.tables
-    expected = {
-        "table1": table1,
-        "table2": DataNode(table2, keys=None, join=None, name="table2"),
-    }
-    assert actual == expected
+def test_register_and_join_inputs():
+    frame = pl.DataFrame({"id": [1], "value": [10]})
+    node = DataNode(frame, keys=("id",), join="left", name="joined")
+    hub = DataHub(pl.DataFrame({"id": [1, 2]}), node, source=frame)
+
+    assert set(hub.tables) == {"joined", "source"}
+    assert hub.get("joined") is node
+    source = hub.get("source")
+    assert (source.name, source.keys, source.join) == ("source", None, None)
+    assert_frame_equal(source.table, frame)
+    assert_frame_equal(hub(), pl.DataFrame({"id": [1, 2], "value": [10, None]}))
 
 
-def test__raise_ValueError_there_are_duplicated_table_name():
-    """Test that a ValueError is raised when there are duplicated table names."""
-    root_df = pl.DataFrame({"id": ["a", "b", "c", "d"]})
+def test_reject_duplicate_input_names():
+    frame = pl.DataFrame({"id": [1]})
+    node = DataNode(frame, keys=("id",), join="left", name="source")
 
-    # for positional arguments
-    table1 = DataNode(
-        pl.DataFrame({"id": ["a", "b", "c", "d", "e"], "table1": [1, 1, 1, 1, 1]}),
-        join="left",
-        keys=["id"],
-        name="table1",
-    )
-
-    # for keyward arguments
-    table2 = pl.DataFrame({"id": ["a", "b", "c", "d", "e"], "table2": [2, 2, 2, 2, 2]})
-
-    with pytest.raises(ValueError):
-        DataHub(
-            root_df,
-            table1,
-            table1=table2,  # set table2 as table1
-        )
+    with pytest.raises(ValueError, match="duplicated"):
+        DataHub(frame, node, source=frame)
 
 
-@pytest.mark.parametrize(
-    "inputs",
-    [
-        pl.DataFrame({"id": ["a", "b", "c", "d", "e"], "table2": [2, 2, 2, 2, 2]}),
-        1,
-        "aaa",
-        {"a": 1, "b": 2},
-    ],
-)
-def test__raise_TypeError_when_invalid_positional_table(inputs):
-    with pytest.raises(TypeError):
-        DataHub(
-            pl.DataFrame({"id": ["a", "b", "c"]}),
-            inputs,
-        )
+def test_reject_dataframe_as_positional_input():
+    with pytest.raises(TypeError, match="DataNode"):
+        DataHub(pl.DataFrame(), pl.DataFrame())
 
 
-@pytest.mark.parametrize(
-    "inputs",
-    [
-        DataNode(
-            pl.DataFrame({"id": ["a", "b", "c", "d", "e"], "table2": [2, 2, 2, 2, 2]}),
-            keys=None,
-            join=None,
-            name="test",
-        ),
-        1,
-        "aaa",
-        {"a": 1, "b": 2},
-    ],
-)
-def test__raise_TypeError_when_invalid_table(inputs):
-    with pytest.raises(TypeError):
-        DataHub(
-            pl.DataFrame({"id": ["a", "b", "c"]}),
-            table=inputs,
-        )
+def test_reject_node_as_named_input():
+    node = DataNode(pl.DataFrame(), keys=None, join=None, name="source")
+
+    with pytest.raises(TypeError, match="pl.DataFrame"):
+        DataHub(pl.DataFrame(), source=node)
 
 
-def test__basic_process(basic_datahub):
-    """
-    Test the basic data processing pipeline of DataHub.
-    """
-
-    actual_result = basic_datahub()
-
-    # check processing order
-    assert basic_datahub.actual_called_order == basic_datahub.expected_called_order
-    # check result dataframe
-    assert actual_result.equals(basic_datahub.expected_result_table)
-
-
-def test__optional_datahub_with_table():
-    """
-    Test the optional processing pipeline in DataHub
-    """
-    dh = DataHubWithOptionalTable(
-        root_df=pl.DataFrame({"id": ["a", "b", "c"]}),
-        table_in1=pl.DataFrame({"id": ["a", "b", "c"], "table_in1": [1, 1, 1]}),
-        table_in2=pl.DataFrame({"id": ["a", "b", "c"], "table_in2": [1, 1, 1]}),
-    )
-
-    output = dh()
-
-    assert "table_in1" in output.columns
-    assert "table_in2" in output.columns
-
-
-def test__optional_datahub_without_table():
-    """
-    Test the optional processing pipeline in DataHub
-    """
-    dh = DataHubWithOptionalTable(
-        root_df=pl.DataFrame({"id": ["a", "b", "c"]}),
-        table_in1=pl.DataFrame({"id": ["a", "b", "c"], "table_in1": [1, 1, 1]}),
-    )
-
-    output = dh()
-
-    assert "table_in1" in output.columns
-    assert "table_in2" not in output.columns
-
-
-def test__raise_RuntimeError_no_tables():
-    """Test that a RuntimeError is raised when no tables are provided to the DataHub."""
-    from .fixtures.data_hub import InvalidDataHubNoTable
-
+def test_reject_hub_without_tables():
     with pytest.raises(TableNotFoundError):
-        _ = InvalidDataHubNoTable()
+        DataHub(pl.DataFrame())
+
+
+def test_execute_dependencies_and_join_only_output(hub):
+    assert_frame_equal(hub(), pl.DataFrame({"id": [1, 2, 3, 4], "score": [4, 7, 10, None]}))
+    assert_frame_equal(
+        hub.get("doubled").table, pl.DataFrame({"id": [1, 2, 3], "doubled": [2, 4, 6]})
+    )
+    assert_frame_equal(
+        hub.get("offset").table, pl.DataFrame({"id": [1, 2, 3], "offset": [2, 3, 4]})
+    )
 
 
 @pytest.mark.parametrize(
-    "filters",
+    "filters, expected",
     [
-        [pl.col("id") == "a"],
-        [pl.col("id") == "a", pl.col("id") != "b"],
+        ([pl.col("score") > 4], {"id": [2, 3], "score": [7, 10]}),
+        ([pl.col("score") > 4, pl.col("score") < 10], {"id": [2], "score": [7]}),
     ],
+    ids=["single", "intersection"],
 )
-def test__filterling_output_table(filters, basic_datahub):
-    """
-    Test the basic data processing pipeline of DataHub.
-    """
-    actual_result = basic_datahub(*filters)
-
-    # check result dataframe
-    expected_table = basic_datahub.expected_result_table
-    for filter in filters:
-        expected_table = expected_table.filter(filter)
-
-    assert actual_result.equals(expected_table)
+def test_filter_output(hub, filters, expected):
+    assert_frame_equal(hub(*filters), pl.DataFrame(expected))
 
 
-def test__get_tables(basic_datahub):
-    """
-    Test getting data by table name
-    """
-    basic_datahub()
+@pytest.mark.parametrize("with_source", [True, False], ids=["present", "missing"])
+def test_optional_dependency_chain(with_source):
+    root = pl.DataFrame({"id": [1]})
+    source = pl.DataFrame({"id": [1], "value": [10]})
+    hub = OptionalHub(root, **({"source": source} if with_source else {}))
 
-    # check created tables
-    assert basic_datahub.get("table1").table.equals(
-        basic_datahub.return_tables_of_each_function["table1"]
-    )
-    assert basic_datahub.get("table2").table.equals(
-        basic_datahub.return_tables_of_each_function["table2"]
-    )
+    assert_frame_equal(hub(), source if with_source else root)
+    for name in ("prepared", "result"):
+        assert isinstance(hub.get(name), EmptyDataNode) is (not with_source)
 
 
-def test__raise_KeyError_get_unknown_tables(basic_datahub):
-    """
-    Test getting unknown data by table name
-    """
-    basic_datahub()
-
-    with pytest.raises(KeyError):
-        basic_datahub.get("aaa")
-
-
-def test__search_table(inputs_visualize_test):
-    datahub_class, inputs_tables = inputs_visualize_test
-    actual = datahub_class.search_tables(*inputs_tables)
-
-    expected = [
-        DataflowNode("input_table1", keys=("id",), join="left", level=-1, shape="[()]"),
-        DataflowNode("input_table2", keys=None, join=None, level=-1, shape="[()]"),
-        DataflowNode("table1_1", keys=("id",), join="inner", level=0, shape="([])"),
-        DataflowNode("table1_2", keys=None, join="inner", level=0, shape="[]"),
-        DataflowNode("table1_3", keys=("id1", "id2"), join="inner", level=0, shape="([])"),
-        DataflowNode("table1_4", keys=None, join=None, level=0, shape="[]"),
-        DataflowNode("table2_1", keys=None, join=None, level=1, shape="[]"),
-        DataflowNode("table2_2", keys=None, join=None, level=1, shape="[]"),
-        DataflowNode("table2_3", keys=None, join=None, level=1, shape="[]"),
-        DataflowNode("table2_4", keys=None, join=None, level=1, shape="[]"),
-        DataflowNode("table3", keys=("id",), join="left", level=2, shape="([])"),
-    ]
-
-    # add children
-    expected[1].add_child(expected[2])
-    expected[1].add_child(expected[3])
-    expected[1].add_child(expected[6])
-    expected[1].add_child(expected[8])
-
-    expected[2].add_child(expected[6])
-    expected[2].add_child(expected[7])
-
-    expected[3].add_child(expected[7])
-
-    expected[4].add_child(expected[8])
-    expected[4].add_child(expected[9])
-
-    expected[5].add_child(expected[10])
-    expected[8].add_child(expected[10])
-    expected[9].add_child(expected[10])
-
-    assert actual == expected
+def test_get_unknown_table(hub):
+    hub()
+    with pytest.raises(KeyError, match="missing"):
+        hub.get("missing")

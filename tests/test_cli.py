@@ -1,44 +1,54 @@
-import pathlib
+from pathlib import Path
 import subprocess
+import sysconfig
 
 import pytest
 
 import pytred
 
 
-def test__cli_make_report():
-    """
-    Check cli does not raise error
-    """
-
-    current_file_path = pathlib.Path(__file__)
-    datahub_file_path = current_file_path.parent / "fixtures" / "data_hub.py"
-    class_name = "ComplecatedDataHub"
-    cmd = ["pytred", "report", datahub_file_path.as_posix(), class_name]
-    cmd += ["--input-table", '{"name": "input_table1", "keys": ["id"], "join": "left"}']
-    cmd += ["--input-table", '{"name": "input_table2"}']
-
-    result = subprocess.run(cmd, stdout=subprocess.PIPE, text=True, check=True)
-    _ = result.stdout
+CLI = str(Path(sysconfig.get_path("scripts")) / "pytred")
 
 
-def test__raise_JosnDecodeError_with_invalid_json_str():
-
-    current_file_path = pathlib.Path(__file__)
-    datahub_file_path = current_file_path.parent / "fixtures" / "data_hub.py"
-    class_name = "ComplecatedDataHub"
-    cmd = ["pytred", "report", datahub_file_path.as_posix(), class_name]
-    cmd += ["--input-table", '{"name": "input_table2",}']  # invalid json format
-
-    with pytest.raises(subprocess.CalledProcessError):
-        subprocess.run(cmd, stdout=subprocess.PIPE, text=True, check=True)
+@pytest.fixture
+def report_command():
+    return [CLI, "report", str(Path(__file__).parent / "fixtures/data_hub.py"), "BranchingHub"]
 
 
-def test__cli_show_version():
+def test_report_cli(report_command):
+    result = subprocess.run(
+        report_command
+        + [
+            "--input-table",
+            '{"name": "source"}',
+            "--input-table",
+            '{"name": "lookup", "keys": ["id"], "join": "left"}',
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
 
-    result = subprocess.run(["pytred", "--version"], stdout=subprocess.PIPE, text=True, check=True)
-    actual = result.stdout
+    assert result.stdout.startswith("## BranchingHub\n")
+    assert "| -1 | lookup | input | | left | id |" in " ".join(result.stdout.split())
+    assert "```mermaid\ngraph TD" in result.stdout
+    assert "source --> doubled" in result.stdout
 
-    expected = f"pytred cli {pytred.__version__}\n"
 
-    assert actual == expected
+def test_report_cli_rejects_invalid_json(report_command):
+    result = subprocess.run(
+        report_command + ["--input-table", '{"name": "source",}'],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "JSONDecodeError" in result.stderr
+    assert result.stdout == ""
+
+
+def test_version_cli():
+    result = subprocess.run([CLI, "--version"], capture_output=True, text=True, check=True)
+
+    assert result.stdout == f"pytred cli {pytred.__version__}\n"
