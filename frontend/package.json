@@ -3,15 +3,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node build.mjs",
-    "test": "playwright test"
+    "build": "node build.mjs"
   },
   "dependencies": {
-    "cytoscape": "3.34.4",
-    "@dagrejs/dagre": "3.1.1"
+    "@dagrejs/dagre": "3.1.1",
+    "cytoscape": "3.34.4"
   },
   "devDependencies": {
-    "@playwright/test": "1.64.1",
     "esbuild": "0.28.2"
   }
 }

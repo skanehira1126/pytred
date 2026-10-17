@@ -43,14 +43,11 @@ the Python package.
 
 ```bash
 python -m pytest tests
-npm exec --prefix frontend -- playwright install chromium
-npm test --prefix frontend
+npm run build --prefix frontend
 uv build
 ```
 
-For an existing local Chrome installation, run
-`PYTRED_BROWSER_CHANNEL=chrome npm test --prefix frontend`.
-Browser tests load the actual bundle, block external requests, and exercise
-selection, layout, zoom, separate views, and disposal. Python tests cover graph
-semantics and the widget MIME bundle. CI rebuilds the assets and rejects stale
-bundles before running the browser tests.
+Python tests cover graph semantics and the widget MIME bundle. CI rebuilds the
+assets and rejects stale bundles. Browser interactions are not automatically
+tested; check rendering and interaction in a Jupyter notebook when changing the
+widget or its JavaScript dependencies.

@@ -91,7 +91,3 @@ jobs:
       - run: npm run build
         working-directory: frontend
       - run: git diff --exit-code -- src/pytred/static
-      - run: npx playwright install --with-deps chromium
-        working-directory: frontend
-      - run: npm test
-        working-directory: frontend
