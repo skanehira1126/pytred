@@ -1,5 +1,7 @@
 import widget from "/src/pytred/static/widget.js";
 
+// 分岐→合流とroot→outputを持つ固定グラフ。結合情報・日本語・HTML風の説明を
+// 含め、表示と操作を確認する。実データの処理やPython側の依存解析は行わない。
 const elements = [
   { data: { id: "source", label: "source", kind: "input", order: -1 } },
   { data: { id: "first", label: "doubled", kind: "process", order: 0 } },
@@ -16,7 +18,9 @@ const elements = [
   { data: { id: "e6", source: "root", target: "output", kind: "root", label: "" } },
 ];
 
-// Implement only the AFM model event boundary; drawing uses the real bundled libraries.
+// anywidgetのモデルから値を読む・変更を購読する部分だけを簡易実装する。
+// 描画処理はモックせず、配布用バンドルのCytoscape.jsとDagreをそのまま使う。
+// 各イベントの購読者が1つという現在のwidget実装に必要な範囲に限定している。
 window.mountFixture = () => {
   const el = document.createElement("div");
   document.body.append(el);
@@ -30,7 +34,9 @@ window.mountFixture = () => {
   const cleanup = widget.render({ model, el });
   return {
     cleanup,
+    // cleanupがモデルの購読を解除したことを、テストから観測する。
     listenerCount: () => listeners.size,
+    // 値の変更とchangeイベントを模擬し、描画側の更新処理を呼び出す。
     update(key, value) { state[key] = value; listeners.get(`change:${key}`)?.(); },
   };
 };
