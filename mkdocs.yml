@@ -8,7 +8,7 @@ nav:
       - DataNode: "api_reference/data_node.md"
       - decorators: "api_reference/decorators.md"
   - Tutorials:
-      - CLI: "tutorials/cli.md"
+      - Visualization: "tutorials/visualization.md"
 plugins:
   - search
   - mkdocs-jupyter
@@ -16,17 +16,11 @@ plugins:
       default_handler: python
       handlers:
         python:
-          rendering:
-            show_source: true
           options:
+            show_source: true
             docstring_style: "numpy"
 markdown_extensions:
   - admonition
   - pymdownx.details
   - pymdownx.superfences
   - codehilite
-  - pymdownx.superfences:
-      custom_fences:
-        - name: mermaid
-          class: mermaid
-          format: !!python/name:pymdownx.superfences.fence_code_format

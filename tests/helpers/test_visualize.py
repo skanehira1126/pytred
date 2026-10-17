@@ -1,107 +1,120 @@
-from pathlib import Path
+import json
 
+from IPython.core.formatters import DisplayFormatter
 import polars as pl
-import pytest
 
 from pytred import DataHub
-from pytred.data_node import EmptyDataNode
-from pytred.helpers.visualize import make_dataflow_graph_from_datahub
-from pytred.helpers.visualize import report_datahub
+from pytred import DataNode
+from pytred.decorators import polars_table
+from pytred.helpers.visualize import collect_dataflow_elements
+from pytred.helpers.visualize import visualize_datahub
 
 from ..fixtures.data_hub import BranchingHub
+from ..fixtures.data_hub import OptionalHub
 
 
-@pytest.fixture
-def source():
-    return EmptyDataNode(name="source", keys=None, join=None)
-
-
-def test_graph_describes_dependencies_and_joins(source):
-    graph, nodes = make_dataflow_graph_from_datahub(BranchingHub, source)
-
-    assert [(n.name, n.level, n.keys, n.join, n.shape) for n in nodes] == [
-        ("source", -1, None, None, "[()]"),
-        ("doubled", 0, None, None, "[]"),
-        ("offset", 0, None, None, "[]"),
-        ("combined", 1, ("id",), "left", "([])"),
-    ]
-    dependencies = {
-        ("source", "doubled"),
-        ("source", "offset"),
-        ("doubled", "combined"),
-        ("offset", "combined"),
-    }
-    assert {(n.name, child.name) for n in nodes for child in n.children} == dependencies
-    assert {(parent.name, n.name) for n in nodes for parent in n.parents} == dependencies
-    assert str(graph).splitlines() == [
-        "graph TD",
-        "    source[(source)]",
-        "    doubled[doubled]",
-        "    offset[offset]",
-        "    combined([combined])",
-        "    root_df[[root_df]]",
-        "    source --> doubled",
-        "    source --> offset",
-        "    doubled --> combined",
-        "    offset --> combined",
-        "    combined -->|left<br>- id| root_df",
-    ]
-
-
-def test_report_contains_documentation_table_and_graph(source):
-    report = report_datahub(BranchingHub, source)
-
-    assert report.startswith("## BranchingHub\nCombine two features derived from one input.")
-    assert "### BranchingHub detail" in report
-    normalized = " ".join(report.split())
-    assert "| -1 | source | input | | | |" in normalized
-    assert "| 0 | offset | function | | | |" in normalized
-    assert (
-        "| 1 | combined | function | Join both features.<br><br>"
-        "Add them to produce the score. | left | id |"
-    ) in normalized
-    assert "### Dataflow image\n```mermaid\ngraph TD" in report
-    assert "doubled --> combined" in report
-
-
-def test_image_export_passes_graph_and_destination_to_mmdc(source, tmp_path, monkeypatch):
-    destination = tmp_path / "graph.svg"
-    captured = []
-
-    def run(command):
-        executable, input_flag, input_path, output_flag, output_path = command
-        captured.append(
-            (executable, input_flag, Path(input_path).read_text(), output_flag, output_path)
-        )
-
-    monkeypatch.setattr("pytred.helpers.visualize.subprocess.run", run)
-    graph, _ = make_dataflow_graph_from_datahub(
-        BranchingHub, source, output=destination, direction="LR"
-    )
-
-    assert str(graph).startswith("graph LR\n")
-    assert captured == [("mmdc", "-i", str(graph), "-o", str(destination))]
-
-
-def test_notebook_display_preserves_dependencies_without_executing_tables():
+def test_graph_describes_dependencies_and_joins_without_execution():
+    # Empty frames deliberately cannot execute BranchingHub's transformations.
     hub = BranchingHub(pl.DataFrame(), source=pl.DataFrame())
-    graph, _ = make_dataflow_graph_from_datahub(
-        BranchingHub, EmptyDataNode(name="source", keys=None, join=None)
+    elements = collect_dataflow_elements(hub)
+    nodes = {e["data"]["id"]: e["data"] for e in elements if "source" not in e["data"]}
+    edges = [e["data"] for e in elements if "source" in e["data"]]
+
+    assert [(n["label"], n["kind"]) for n in nodes.values()] == [
+        ("source", "input"),
+        ("doubled", "process"),
+        ("offset", "process"),
+        ("combined", "process"),
+        ("root_df", "root"),
+        ("Output", "output"),
+    ]
+    assert {
+        (nodes[e["source"]]["label"], nodes[e["target"]]["label"], e["kind"]) for e in edges
+    } == {
+        ("source", "doubled", "dependency"),
+        ("source", "offset", "dependency"),
+        ("doubled", "combined", "dependency"),
+        ("offset", "combined", "dependency"),
+        ("combined", "Output", "join"),
+        ("root_df", "Output", "root"),
+    }
+    combined = next(n for n in nodes.values() if n["label"] == "combined")
+    assert (combined["join"], combined["keys"], combined["order"]) == ("left", ["id"], 1)
+    assert "Join both features." in combined["description"]
+    assert list(hub.tables) == ["source"]
+
+
+def test_independent_steps_and_sparse_execution_order():
+    class IndependentHub(DataHub):
+        @polars_table(0)
+        def first(self):
+            raise AssertionError("Visualization must not execute steps")
+
+        @polars_table(10, "id", join="left")
+        def last(self):
+            raise AssertionError("Visualization must not execute steps")
+
+    widget = visualize_datahub(IndependentHub(pl.DataFrame()))
+    try:
+        edges = [e["data"] for e in widget.elements if "source" in e["data"]]
+        assert {e["kind"] for e in edges} == {"join", "root"}
+        assert all(e["target"] == "output" for e in edges)
+    finally:
+        widget.close()
+
+
+def test_input_joins_and_arbitrary_names_are_preserved():
+    names = ["root_df", "output", 'end </script><b> & "quoted"']
+    hub = DataHub(
+        pl.DataFrame(),
+        *[DataNode(pl.DataFrame(), keys=('a|b<"c',), join="left", name=name) for name in names],
+    )
+    elements = collect_dataflow_elements(hub)
+    json.dumps(elements)
+    assert len({e["data"]["id"] for e in elements}) == len(elements)
+    assert [e["data"]["label"] for e in elements if e["data"]["kind"] == "input"] == names
+    joins = [e["data"] for e in elements if e["data"]["kind"] == "join"]
+    assert len(joins) == 3
+    assert all(e["label"] == 'left: a|b<"c' for e in joins)
+    assert "</script>" not in hub._repr_html_()
+    assert "&lt;/script&gt;" in hub._repr_html_()
+
+
+def test_missing_optional_dependency_is_visible():
+    elements = collect_dataflow_elements(OptionalHub(pl.DataFrame()))
+    missing = [e["data"] for e in elements if e["data"]["kind"] == "missing"]
+    assert len(missing) == 1
+    assert missing[0]["label"] == "source"
+    prepared = next(e["data"] for e in elements if e["data"].get("label") == "prepared")
+    assert prepared["optional"] is True
+    assert any(
+        e["data"].get("source") == missing[0]["id"] and e["data"].get("target") == prepared["id"]
+        for e in elements
     )
 
-    html = hub._repr_html_()
 
-    assert '<div class="mermaid">' in html
-    assert str(graph) in html
-    assert "window.mermaid.contentLoaded();" in html
-    assert list(hub.tables) == ["source"]
+def test_notebook_formatter_uses_widget_mime_and_bundled_assets():
+    import ipywidgets
 
-
-def test_notebook_display_of_input_only_hub():
     hub = DataHub(pl.DataFrame(), source=pl.DataFrame())
+    bundle, _ = DisplayFormatter().format(hub)
+    view = bundle["application/vnd.jupyter.widget-view+json"]
+    # Inspect the actual comm state referenced by the displayed MIME bundle.
+    state = ipywidgets.Widget.get_manager_state()["state"][view["model_id"]]["state"]
+    assert state["elements"] == collect_dataflow_elements(hub)
+    assert "export" in state["_esm"]
+    assert "pytred-dataflow" in state["_css"]
+    assert bundle["text/plain"] == "DataflowWidget(3 nodes)"
 
-    html = hub._repr_html_()
 
-    assert "source[(source)]" in html
-    assert "root_df[[root_df]]" in html
-    assert list(hub.tables) == ["source"]
+def test_widget_instances_have_independent_state():
+    first = visualize_datahub(DataHub(pl.DataFrame(), source=pl.DataFrame()), direction="LR")
+    second = visualize_datahub(DataHub(pl.DataFrame(), other=pl.DataFrame()))
+    try:
+        assert first.model_id != second.model_id
+        assert first.direction == "LR"
+        assert second.direction == "TB"
+        assert first.elements != second.elements
+    finally:
+        first.close()
+        second.close()

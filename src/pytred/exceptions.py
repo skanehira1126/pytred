@@ -8,7 +8,3 @@ class InvalidReturnValueError(Exception):
 
 class TableNotFoundError(Exception):
     pass
-
-
-class InvalidFunctionCalledError(Exception):
-    pass

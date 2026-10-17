@@ -345,6 +345,10 @@ class DataHub:
                 f"table '{table_name}' is not found: Current table list {self.tables.keys()}."
             ) from err
 
+    def _repr_mimebundle_(self, **kwargs):
+        """Display the interactive dataflow through the notebook widget protocol."""
+        return visualize.visualize_datahub(self)._repr_mimebundle_(**kwargs)
+
     def _repr_html_(self):
-        """Display the dataflow in a Jupyter notebook."""
+        """Provide a static summary for HTML-only frontends."""
         return visualize.render_datahub_html(self)
