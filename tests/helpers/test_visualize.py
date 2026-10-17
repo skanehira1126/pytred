@@ -4,7 +4,6 @@ import polars as pl
 import pytest
 
 from pytred import DataHub
-
 from pytred.data_node import EmptyDataNode
 from pytred.helpers.visualize import make_dataflow_graph_from_datahub
 from pytred.helpers.visualize import report_datahub
@@ -17,13 +16,8 @@ def source():
     return EmptyDataNode(name="source", keys=None, join=None)
 
 
-@pytest.mark.parametrize("legacy_api", [False, True], ids=["visualization", "datahub"])
-def test_graph_describes_dependencies_and_joins(source, legacy_api):
-    if legacy_api:
-        nodes = BranchingHub.search_tables(source)
-        graph = BranchingHub.get_dataflow_graph(nodes)
-    else:
-        graph, nodes = make_dataflow_graph_from_datahub(BranchingHub, source)
+def test_graph_describes_dependencies_and_joins(source):
+    graph, nodes = make_dataflow_graph_from_datahub(BranchingHub, source)
 
     assert [(n.name, n.level, n.keys, n.join, n.shape) for n in nodes] == [
         ("source", -1, None, None, "[()]"),

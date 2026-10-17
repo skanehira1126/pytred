@@ -11,6 +11,6 @@ delegates to `render_datahub_html(hub)` without executing the pipeline.
 For class-based graphs and reports, use `make_dataflow_graph_from_datahub()` and
 `report_datahub()` from `pytred.helpers.visualize`.
 
-`DataHub.search_tables()` and `DataHub.get_dataflow_graph()` remain as compatibility
-entry points. Existing imports of `DataflowNode`, `DataEdge`, and `DataflowGraph`
-from `pytred.data_node` also remain supported.
+Use `search_tables()` and `get_dataflow_graph()` from `pytred.helpers.visualize`
+when working with visualization nodes directly. Import `DataflowNode`, `DataEdge`,
+and `DataflowGraph` from `pytred.helpers.dataflow`.

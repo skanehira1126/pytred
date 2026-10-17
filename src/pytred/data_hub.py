@@ -5,12 +5,9 @@ from functools import reduce
 import inspect
 from logging import getLogger
 from operator import and_
-from typing import Literal
 
 import polars as pl
 
-from pytred.data_node import DataflowGraph
-from pytred.data_node import DataflowNode
 from pytred.data_node import DataNode
 from pytred.data_node import EmptyDataNode
 from pytred.exceptions import TableNotFoundError
@@ -304,11 +301,6 @@ class DataHub:
                     name=name,
                 )
 
-    @classmethod
-    def search_tables(cls, *input_tables: EmptyDataNode) -> list[DataflowNode]:
-        """Collect visualization nodes; retained for compatibility."""
-        return visualize.search_tables(cls, *input_tables)
-
     def post_step(self, df: pl.DataFrame) -> pl.DataFrame:
         """
         Performs any final processing on the joined DataFrame.
@@ -352,13 +344,6 @@ class DataHub:
             raise KeyError(
                 f"table '{table_name}' is not found: Current table list {self.tables.keys()}."
             ) from err
-
-    @staticmethod
-    def get_dataflow_graph(
-        nodes: list[DataflowNode], direction: Literal["TD", "LR"] = "TD"
-    ) -> DataflowGraph:
-        """Build a visualization graph; retained for compatibility."""
-        return visualize.get_dataflow_graph(nodes, direction)
 
     def _repr_html_(self):
         """Display the dataflow in a Jupyter notebook."""
