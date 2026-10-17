@@ -4,13 +4,19 @@ import pathlib
 import subprocess
 import sys
 import tempfile
+from typing import TYPE_CHECKING
 from typing import Literal
 
-from pytred.data_hub import DataHub
-from pytred.data_node import DataflowGraph
-from pytred.data_node import DataflowNode
 from pytred.data_node import EmptyDataNode
+from pytred.helpers.dataflow import DataEdge
+from pytred.helpers.dataflow import DataflowGraph
+from pytred.helpers.dataflow import DataflowNode
+from pytred.helpers.decorator import get_metadata
 from pytred.helpers.md_tabulator import MarkdownTableTabulator
+
+
+if TYPE_CHECKING:
+    from pytred.data_hub import DataHub
 
 
 TEMPLATE = """## {datahub_name}
@@ -107,8 +113,8 @@ def make_dataflow_graph_from_datahub(
         DataNode used in input DataHub class
 
     """
-    nodes = datahub_class.search_tables(*tables)
-    graph = datahub_class.get_dataflow_graph(nodes, direction)
+    nodes = search_tables(datahub_class, *tables)
+    graph = get_dataflow_graph(nodes, direction)
 
     if output is not None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -148,3 +154,132 @@ def trim(docstring: str | None) -> str:
         trimmed.pop(0)
     # Return a single string:
     return "\n".join(trimmed)
+
+
+def collect_dataflow_nodes(
+    datahub: type[DataHub] | DataHub,
+    table_order: dict[str, int],
+    *input_tables: EmptyDataNode,
+) -> list[DataflowNode]:
+    """Build display nodes from execution metadata without executing any tables."""
+    nodes = [
+        DataflowNode(table.name, keys=table.keys, join=table.join, level=-1, shape="[()]")
+        for table in input_tables
+    ]
+    for order, name, arguments in datahub.collect_table_and_arguments(
+        table_order, include_input_table=True
+    ):
+        if order == -1:
+            join = None
+            keys = None
+            shape = "[()]"
+        else:
+            function = getattr(datahub, name)
+            join = get_metadata(function, "join")
+            keys = get_metadata(function, "keys")
+            shape = "[]" if join is None else "([])"
+        node = DataflowNode(name, keys=keys, join=join, level=order, shape=shape)
+        for argument in arguments:
+            for parent in nodes:
+                if parent.name == argument:
+                    parent.add_child(node)
+        nodes.append(node)
+    return nodes
+
+
+def search_tables(datahub_class: type[DataHub], *tables: EmptyDataNode) -> list[DataflowNode]:
+    """Collect display nodes from a DataHub class and its declared inputs."""
+    if datahub_class.registerd_tables_order is None:
+        raise ValueError("Functions as table are not found.")
+    return collect_dataflow_nodes(datahub_class, datahub_class.registerd_tables_order, *tables)
+
+
+def get_dataflow_graph(
+    nodes: list[DataflowNode], direction: Literal["TD", "LR"] = "TD"
+) -> DataflowGraph:
+    """
+    Get the hierarchical structure of data preprocessing nodes.
+
+    Given a list of ProcessingNode objects, which each have a name, level, and children,
+    this function creates a directed graph that visualizes the dependencies between the nodes.
+    Nodes at the same level are grouped together, and dependencies are shown with edges.
+
+    Parameters
+    ----------
+    nodes: list of DataflowNode
+        A list of dataflow nodes, each with a name, level, and children.
+    direction: {'TD', 'LR'}, default 'TD'
+        graph direction
+
+    Returns
+    -------
+    DataflowGraph
+        A DataflowGraph object that can be rendered to visualize the tree structure.
+    """
+
+    graph = DataflowGraph(graph_direction=direction)
+
+    max_level = max([node.level for node in nodes])
+
+    for _node in sorted(nodes, key=lambda x: x.level):
+        graph.add_node(_node)
+
+        # add edge to children
+        for _child_node in _node.children:
+            level_diff = abs(_node.level - _child_node.level)
+            link_type = "-" * level_diff + "->"
+            edge = DataEdge(_node.name, _child_node.name, link_type=link_type)
+            graph.add_edge(edge)
+
+        # if node does not parents, make invisible edge
+        if len(_node.parents) == 0 and _node.level >= 0:
+            # target node index of invisible edge
+            nodes_in_level = graph.get_nodes_by_level(_node.level)
+            nodes_in_before_level = graph.get_nodes_by_level(_node.level - 1)
+
+            target_node_index = min(len(nodes_in_level), len(nodes_in_before_level)) - 1
+
+            invisible_edge = DataEdge(
+                nodes_in_before_level[target_node_index].name,
+                _node.name,
+                link_type="~~~",
+            )
+            graph.add_edge(invisible_edge)
+
+        # add edge to output table
+        if _node.join is not None:
+            level_diff = max_level - _node.level
+            if _node.keys is None:
+                keys = ""
+            else:
+                keys = "<br>" + "<br>".join([f"- {key}" for key in _node.keys])
+            link_type = "-" * (level_diff + 1) + f"->|{_node.join}{keys}|"
+            edge = DataEdge(_node.name, "root_df", link_type=link_type)
+            graph.add_edge(edge)
+
+    graph.add_node(
+        DataflowNode(name="root_df", join=None, keys=None, level=max_level + 1, shape="[[]]")
+    )
+
+    return graph
+
+
+def render_datahub_html(datahub: DataHub) -> str:
+    """Render an instance's dataflow for notebook display without executing it."""
+    nodes = collect_dataflow_nodes(datahub, datahub.table_order)
+    graph = get_dataflow_graph(nodes)
+    html = (
+        """
+    <div class="mermaid">
+    """
+        + str(graph)
+        + """
+    </div>
+    <script>
+    if (window.mermaid) {{
+        window.mermaid.contentLoaded();
+    }}
+    </script>
+    """
+    )
+    return html

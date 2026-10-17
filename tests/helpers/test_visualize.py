@@ -1,6 +1,9 @@
 from pathlib import Path
 
+import polars as pl
 import pytest
+
+from pytred import DataHub
 
 from pytred.data_node import EmptyDataNode
 from pytred.helpers.visualize import make_dataflow_graph_from_datahub
@@ -14,8 +17,13 @@ def source():
     return EmptyDataNode(name="source", keys=None, join=None)
 
 
-def test_graph_describes_dependencies_and_joins(source):
-    graph, nodes = make_dataflow_graph_from_datahub(BranchingHub, source)
+@pytest.mark.parametrize("legacy_api", [False, True], ids=["visualization", "datahub"])
+def test_graph_describes_dependencies_and_joins(source, legacy_api):
+    if legacy_api:
+        nodes = BranchingHub.search_tables(source)
+        graph = BranchingHub.get_dataflow_graph(nodes)
+    else:
+        graph, nodes = make_dataflow_graph_from_datahub(BranchingHub, source)
 
     assert [(n.name, n.level, n.keys, n.join, n.shape) for n in nodes] == [
         ("source", -1, None, None, "[()]"),
@@ -79,3 +87,27 @@ def test_image_export_passes_graph_and_destination_to_mmdc(source, tmp_path, mon
 
     assert str(graph).startswith("graph LR\n")
     assert captured == [("mmdc", "-i", str(graph), "-o", str(destination))]
+
+
+def test_notebook_display_preserves_dependencies_without_executing_tables():
+    hub = BranchingHub(pl.DataFrame(), source=pl.DataFrame())
+    graph, _ = make_dataflow_graph_from_datahub(
+        BranchingHub, EmptyDataNode(name="source", keys=None, join=None)
+    )
+
+    html = hub._repr_html_()
+
+    assert '<div class="mermaid">' in html
+    assert str(graph) in html
+    assert "window.mermaid.contentLoaded();" in html
+    assert list(hub.tables) == ["source"]
+
+
+def test_notebook_display_of_input_only_hub():
+    hub = DataHub(pl.DataFrame(), source=pl.DataFrame())
+
+    html = hub._repr_html_()
+
+    assert "source[(source)]" in html
+    assert "root_df[[root_df]]" in html
+    assert list(hub.tables) == ["source"]
