@@ -13,10 +13,10 @@
   "interface": {
     "displayName": "pytred",
     "shortDescription": "Build and inspect pytred preprocessing pipelines.",
-    "longDescription": "Use pytred DataHub, DataNode, and polars_table to compose preprocessing pipelines, inspect notebook workflows, and generate CLI reports.",
+    "longDescription": "Use pytred DataHub, DataNode, and polars_table to compose preprocessing pipelines and inspect interactive notebook workflows.",
     "developerName": "Shinichi Kanehira",
     "category": "Productivity",
     "capabilities": [],
-    "defaultPrompt": ["Help me build a pytred preprocessing pipeline.", "Explain how to join existing tables with DataNode.", "Help me visualize and report a pytred workflow."]
+    "defaultPrompt": ["Help me build a pytred preprocessing pipeline.", "Explain how to join existing tables with DataNode.", "Help me visualize a pytred workflow in a notebook."]
   }
 }

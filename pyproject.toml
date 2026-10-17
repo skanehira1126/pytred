@@ -12,7 +12,6 @@ dependencies = [
     "typing-extensions>=4.10",
     "pyarrow>=11",
     "matplotlib",
-    "tabulate",
 ]
 readme = "README.md"
 requires-python = ">= 3.9"
@@ -24,9 +23,6 @@ build-backend = "flit_core.buildapi"
 [tool.hatch.version]
 path = "src/pytred/__init__.py"
 
-[project.scripts]
-pytred = "pytred.cli:cli"
-
 [tool.uv]
 dev-dependencies = [
     "tox-uv",
@@ -37,7 +33,6 @@ dev-dependencies = [
     "mkdocstrings>=0.24.1",
     "mkdocs-material>=9.5.14",
     "mkdocstrings-python>=1.9.0",
-    "graphviz>=0.20.2",
     "mkdocs-jupyter>=0.24.6",
     "jupyterlab>=4.2.5",
     "tox-uv>=1.11.2",
@@ -95,3 +90,6 @@ force-single-line = true
 force-sort-within-sections = true
 lines-after-imports = 2
 
+[tool.flit.sdist]
+include = ["frontend/", "src/pytred/static/"]
+exclude = ["frontend/node_modules/", "frontend/test-results/", "frontend/playwright-report/"]

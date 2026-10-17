@@ -17,10 +17,18 @@ Iht facilitates a structured approach to data operations, allowing each function
 1. [Preprocessing with completed data](./examples/02_use_completed_data.ipynb)
 1. [visualize workflow](./examples/03_visualize_workflow.ipynb)
 
+## Notebook visualization
+
+Use `display(hub)` in a notebook with Jupyter Widgets support to explore the
+pipeline interactively. Zoom, pan, select a node to inspect dependencies and join
+conditions, or switch the layout direction. Rendering does not execute the pipeline.
+Cytoscape.js and Dagre are bundled with the package; no CDN or Node.js is required.
+See the [visualization guide](docs/tutorials/visualization.md).
+
 ## Codex plugin
 
 This repository includes a Codex plugin that teaches AI agents how to use
-`DataHub`, `DataNode`, `@polars_table`, and the `pytred report` CLI without relying
+`DataHub`, `DataNode`, `@polars_table`, and interactive notebook visualization without relying
 on generic data-pipeline assumptions.
 
 Install the Python package in your project's environment as usual:

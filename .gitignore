@@ -164,3 +164,8 @@ cython_debug/
 requirements.lock
 requirements-dev.lock
 /.refinery.local.yaml
+
+# Widget development
+node_modules/
+frontend/test-results/
+frontend/playwright-report/

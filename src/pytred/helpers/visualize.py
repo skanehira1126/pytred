@@ -1,150 +1,150 @@
+"""Interactive notebook views of DataHub definitions, without executing tables."""
+
 from __future__ import annotations
 
-import pathlib
-import subprocess
-import sys
-import tempfile
+from dataclasses import dataclass
+from dataclasses import field
+from html import escape
+import inspect
+import json
+from pathlib import Path
+from typing import TYPE_CHECKING
 from typing import Literal
 
-from pytred.data_hub import DataHub
-from pytred.data_node import DataflowGraph
-from pytred.data_node import DataflowNode
-from pytred.data_node import EmptyDataNode
-from pytred.helpers.md_tabulator import MarkdownTableTabulator
+from pytred.helpers.decorator import get_metadata
 
 
-TEMPLATE = """## {datahub_name}
-{datahub_description}
-
-### {datahub_name} detail
-{detail}
-
-### Dataflow image
-```mermaid
-{mermaid}
-```
-"""
+if TYPE_CHECKING:
+    from pytred.data_hub import DataHub
 
 
-def report_datahub(datahub_class: type[DataHub], *tables: EmptyDataNode) -> str:
+@dataclass(frozen=True)
+class DataflowView:
+    """An HTML snapshot with browser-only interaction and no live Python model."""
+
+    html: str = field(repr=False)
+
+    def _repr_html_(self):
+        return self.html
+
+
+def collect_dataflow_elements(datahub: DataHub) -> list[dict]:
+    """Describe declared dependencies and joins as JSON-compatible graph elements.
+
+    Node IDs are independent of user-provided names. Missing arguments are shown
+    explicitly. Execution order is metadata, not a graph rank or an edge length.
     """
-    Make report of datahub with markdown format.
-    This report has contents below.
-    1. docstrings of datahub class
-    2. image of dataflow
-    3. tables about each tables in datahub
-
-    Parameters
-    -----
-    datahub_class: DataHub class
-        make report of this datahub
-    *tables: EmptyDataNode
-        EmptyDataNode used in input DataHub class
-
-    Returns
-    -------
-    str
-        report of this datahub
-    """
-
-    template_variables = {
-        "datahub_name": datahub_class.__name__,
-        "datahub_description": trim(datahub_class.__doc__).replace("\n", "  \n"),
-    }
-
-    # make graph
-    graph, dataflow_nodes = make_dataflow_graph_from_datahub(datahub_class, *tables)
-    template_variables["mermaid"] = str(graph)
-
-    # make table detail
-    md_tabulator = MarkdownTableTabulator(mode="row")
-    for node in dataflow_nodes:
-        params = {
-            "order": node.level,
-            "name": node.name,
-        }
-        if node.level == -1:
-            params["table_type"] = "input"
-            params["description"] = ""
+    tables = list(
+        datahub.collect_table_and_arguments(datahub.table_order, include_input_table=True)
+    )
+    identifiers = {name: f"table-{index}" for index, (_, name, _) in enumerate(tables)}
+    nodes = []
+    edges = []
+    for order, name, _ in tables:
+        if order == -1:
+            table = datahub.tables[name]
+            join, keys = table.join, table.keys
+            description = ""
+            optional = False
         else:
-            params["table_type"] = "function"
-            params["description"] = trim(getattr(datahub_class, node.name).__doc__).replace(
-                "\n", "<br>"
+            function = getattr(datahub, name)
+            join = get_metadata(function, "join")
+            keys = get_metadata(function, "keys")
+            description = inspect.getdoc(function) or ""
+            optional = bool(get_metadata(function, "is_optional"))
+        nodes.append(
+            {
+                "data": {
+                    "id": identifiers[name],
+                    "label": name,
+                    "kind": "input" if order == -1 else "process",
+                    "order": order,
+                    "join": join or "",
+                    "keys": list(keys) if keys is not None else [],
+                    "description": description,
+                    "optional": optional,
+                }
+            }
+        )
+        if join is not None:
+            edges.append(
+                {
+                    "data": {
+                        "source": identifiers[name],
+                        "target": "output",
+                        "kind": "join",
+                        "label": join + (": " + ", ".join(keys) if keys else ""),
+                    }
+                }
             )
 
-        if node.join is None:
-            params["join"] = ""
-            params["keys"] = ""
-        else:
-            params["join"] = node.join
-            params["keys"] = ", ".join(node.keys) if node.keys is not None else ""
+    for _, name, arguments in tables:
+        for argument in arguments:
+            if argument not in identifiers:
+                identifiers[argument] = f"table-{len(identifiers)}"
+                nodes.append(
+                    {
+                        "data": {
+                            "id": identifiers[argument],
+                            "label": argument,
+                            "kind": "missing",
+                        }
+                    }
+                )
+            edges.append(
+                {
+                    "data": {
+                        "source": identifiers[argument],
+                        "target": identifiers[name],
+                        "kind": "dependency",
+                        "label": "",
+                    }
+                }
+            )
 
-        md_tabulator.add_rows(params)
+    nodes.extend(
+        [
+            {"data": {"id": "root", "label": "root_df", "kind": "root"}},
+            {"data": {"id": "output", "label": "Output", "kind": "output"}},
+        ]
+    )
+    edges.append({"data": {"source": "root", "target": "output", "kind": "root", "label": ""}})
+    for index, edge in enumerate(edges):
+        edge["data"]["id"] = f"edge-{index}"
+    return nodes + edges
 
-    template_variables["detail"] = md_tabulator.build(index=False)
 
-    return TEMPLATE.format(**template_variables)
+def visualize_datahub(datahub: DataHub, *, direction: Literal["TB", "LR"] = "TB") -> DataflowView:
+    """Create a displayable HTML snapshot without executing the DataHub.
 
-
-def make_dataflow_graph_from_datahub(
-    datahub_class: type[DataHub],
-    *tables: EmptyDataNode,
-    output: str | pathlib.Path | None = None,
-    direction: Literal["TD", "LR"] = "TD",
-) -> tuple[DataflowGraph, list[DataflowNode]]:
+    Requires trusted HTML output with JavaScript and iframe support. The graph
+    libraries are bundled; no widget manager, comm, or CDN is used.
     """
-    Visualize the hierarchical structure of data preprocessing nodes from DataHub.
-
-    Parameters
-    ----------
-    datahub: DataHub class
-        visualizing dataflow of this DataHub
-    output: str or pathlib.Path, optional
-        file path of dataflow image
-    direction: {'TD', 'LR'}, default 'TD'
-        graph direction
-    *tables: EmptyDataNode
-        DataNode used in input DataHub class
-
-    """
-    nodes = datahub_class.search_tables(*tables)
-    graph = datahub_class.get_dataflow_graph(nodes, direction)
-
-    if output is not None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            file_path = pathlib.Path(tmpdir, "temp.mmd")
-            with file_path.open("w") as f:
-                f.write(str(graph))
-
-            subprocess.run(["mmdc", "-i", file_path.as_posix(), "-o", str(output)])
-
-    return graph, nodes
+    return DataflowView(render_datahub_html(datahub, direction=direction))
 
 
-def trim(docstring: str | None) -> str:
-    """
-    ref.: https://peps.python.org/pep-0257/
-    """
-    if not docstring:
-        return ""
-    # Convert tabs to spaces (following the normal Python rules)
-    # and split into a list of lines:
-    lines = docstring.expandtabs().splitlines()
-    # Determine minimum indentation (first line doesn't count):
-    indent = sys.maxsize
-    for line in lines[1:]:
-        stripped = line.lstrip()
-        if stripped:
-            indent = min(indent, len(line) - len(stripped))
-    # Remove indentation (first line is special):
-    trimmed = [lines[0].strip()]
-    if indent < sys.maxsize:
-        for line in lines[1:]:
-            trimmed.append(line[indent:].rstrip())
-    # Strip off trailing and leading blank lines:
-    while trimmed and not trimmed[-1]:
-        trimmed.pop()
-    while trimmed and not trimmed[0]:
-        trimmed.pop(0)
-    # Return a single string:
-    return "\n".join(trimmed)
+def render_datahub_html(datahub: DataHub, *, direction: Literal["TB", "LR"] = "TB") -> str:
+    """Embed graph data and bundled assets in an isolated HTML document."""
+    if direction not in ("TB", "LR"):
+        raise ValueError("direction must be 'TB' or 'LR'")
+    assets = Path(__file__).parents[1] / "static"
+    script = (assets / "dataflow.js").read_text(encoding="utf-8")
+    style = (assets / "dataflow.css").read_text(encoding="utf-8")
+    # JSON is script text, not HTML: escape '<' so names/docstrings cannot close
+    # the data script. The entire document is then escaped for the srcdoc attribute.
+    payload = json.dumps(
+        {"elements": collect_dataflow_elements(datahub), "direction": direction}
+    ).replace("<", "\\u003c")
+    document = (
+        '<!doctype html><html><head><meta charset="utf-8">'
+        f"<style>body {{ margin: 0; }}{style}</style></head><body>"
+        f'<script type="application/json" id="pytred-data">{payload}</script>'
+        f"<script>{script}</script></body></html>"
+    )
+    names = ", ".join(escape(name) for name in datahub.table_order)
+    return (
+        f"<div><strong>{escape(type(datahub).__name__)}</strong>: {names}"
+        '<iframe title="DataHub pipeline graph" sandbox="allow-scripts" '
+        'style="width:100%;height:760px;border:0" '
+        f'srcdoc="{escape(document, quote=True)}"></iframe></div>'
+    )

@@ -5,16 +5,13 @@ from functools import reduce
 import inspect
 from logging import getLogger
 from operator import and_
-from typing import Literal
 
 import polars as pl
 
-from pytred.data_node import DataEdge
-from pytred.data_node import DataflowGraph
-from pytred.data_node import DataflowNode
 from pytred.data_node import DataNode
 from pytred.data_node import EmptyDataNode
 from pytred.exceptions import TableNotFoundError
+from pytred.helpers import visualize
 from pytred.helpers.decorator import get_metadata
 
 
@@ -304,75 +301,6 @@ class DataHub:
                     name=name,
                 )
 
-    @classmethod
-    def search_tables(cls, *input_tables: EmptyDataNode) -> list:
-        """
-        Creates tables based on the annotated functions and their execution order.
-
-        Parameters
-        ----------
-        input_tables: EmptyDataNode
-
-        Returns
-        -------
-        list of DataflowNode
-        """
-        processing_nodes = [
-            DataflowNode(
-                data_node.name,
-                join=data_node.join,
-                keys=data_node.keys,
-                level=-1,
-                shape="[()]",
-            )
-            for data_node in input_tables
-        ]
-
-        if cls.registerd_tables_order is None:
-            raise ValueError("Functions as table are not found.")
-
-        for order, name, arg_table_names in cls.collect_table_and_arguments(
-            cls.registerd_tables_order
-        ):
-            # get function arguments to check input tables
-            logger.info(f"target table name: {name}")
-
-            node = cls._get_dataflow_node(order, name)
-
-            for table_name in arg_table_names:
-                for parent_node in processing_nodes:
-                    if parent_node.name == table_name:
-                        parent_node.add_child(node)
-
-            processing_nodes.append(node)
-
-        return processing_nodes
-
-    @classmethod
-    def _get_dataflow_node(cls, level: int, name: str) -> DataflowNode:
-        """
-        Get DataflowNode to visualize data processing graph.
-        """
-        if level == -1:
-            shape = "[()]"
-            join_type = None
-            keys = None
-        else:
-            target_function = getattr(cls, name)
-            join_type = get_metadata(target_function, "join")
-            keys = get_metadata(target_function, "keys")
-            shape = "[]" if join_type is None else "([])"
-
-        node = DataflowNode(
-            name,
-            join=join_type,
-            keys=keys,
-            level=level,
-            shape=shape,
-        )
-
-        return node
-
     def post_step(self, df: pl.DataFrame) -> pl.DataFrame:
         """
         Performs any final processing on the joined DataFrame.
@@ -417,110 +345,6 @@ class DataHub:
                 f"table '{table_name}' is not found: Current table list {self.tables.keys()}."
             ) from err
 
-    @staticmethod
-    def get_dataflow_graph(
-        nodes: list[DataflowNode], direction: Literal["TD", "LR"] = "TD"
-    ) -> DataflowGraph:
-        """
-        Get the hierarchical structure of data preprocessing nodes.
-
-        Given a list of ProcessingNode objects, which each have a name, level, and children,
-        this function creates a directed graph that visualizes the dependencies between the nodes.
-        Nodes at the same level are grouped together, and dependencies are shown with edges.
-
-        Parameters
-        ----------
-        nodes: list of DataflowNode
-            A list of dataflow nodes, each with a name, level, and children.
-        direction: {'TD', 'LR'}, default 'TD'
-            graph direction
-
-        Returns
-        -------
-        DataflowGraph
-            A DataflowGraph object that can be rendered to visualize the tree structure.
-        """
-
-        graph = DataflowGraph(graph_direction=direction)
-
-        max_level = max([node.level for node in nodes])
-
-        for _node in sorted(nodes, key=lambda x: x.level):
-            graph.add_node(_node)
-
-            # add edge to children
-            for _child_node in _node.children:
-                level_diff = abs(_node.level - _child_node.level)
-                link_type = "-" * level_diff + "->"
-                edge = DataEdge(_node.name, _child_node.name, link_type=link_type)
-                graph.add_edge(edge)
-
-            # if node does not parents, make invisible edge
-            if len(_node.parents) == 0 and _node.level >= 0:
-                # target node index of invisible edge
-                nodes_in_level = graph.get_nodes_by_level(_node.level)
-                nodes_in_before_level = graph.get_nodes_by_level(_node.level - 1)
-
-                target_node_index = min(len(nodes_in_level), len(nodes_in_before_level)) - 1
-
-                invisible_edge = DataEdge(
-                    nodes_in_before_level[target_node_index].name,
-                    _node.name,
-                    link_type="~~~",
-                )
-                graph.add_edge(invisible_edge)
-
-            # add edge to output table
-            if _node.join is not None:
-                level_diff = max_level - _node.level
-                if _node.keys is None:
-                    keys = ""
-                else:
-                    keys = "<br>" + "<br>".join([f"- {key}" for key in _node.keys])
-                link_type = "-" * (level_diff + 1) + f"->|{_node.join}{keys}|"
-                edge = DataEdge(_node.name, "root_df", link_type=link_type)
-                graph.add_edge(edge)
-
-        graph.add_node(
-            DataflowNode(name="root_df", join=None, keys=None, level=max_level + 1, shape="[[]]")
-        )
-
-        return graph
-
     def _repr_html_(self):
-        """
-        Display dataprocessing graph on jupyter notebook
-        """
-        processing_nodes = []
-        for order, name, arg_table_names in self.collect_table_and_arguments(
-            self.table_order, include_input_table=True
-        ):
-            # get function arguments to check input tables
-            logger.info(f"target table name: {name}")
-
-            node = self._get_dataflow_node(order, name)
-
-            for table_name in arg_table_names:
-                for parent_node in processing_nodes:
-                    if parent_node.name == table_name:
-                        parent_node.add_child(node)
-
-            processing_nodes.append(node)
-
-        graph = self.get_dataflow_graph(processing_nodes)
-
-        html = (
-            """
-        <div class="mermaid">
-        """
-            + str(graph)
-            + """
-        </div>
-        <script>
-        if (window.mermaid) {{
-            window.mermaid.contentLoaded();
-        }}
-        </script>
-        """
-        )
-        return html
+        """Display a self-contained graph snapshot without running the pipeline."""
+        return visualize.render_datahub_html(self)

@@ -140,11 +140,9 @@ Guidance:
 - `cross` and `None` should not declare keys.
 - Instantiating `DataHub` with no tables raises `TableNotFoundError`.
 
-## Visualize and Report
+## Notebook Visualization
 
-### Notebook visualization
-
-`DataHub` implements `_repr_html_()`, so a notebook can render the dataflow directly.
+Display a DataHub instance in a notebook with Jupyter Widgets support:
 
 ```python
 from IPython.display import display
@@ -153,23 +151,17 @@ from IPython.display import display
 display(hub)
 ```
 
-Use this for dependency inspection while iterating on a `DataHub` subclass.
+The Cytoscape.js graph shows dependencies and joins without executing the pipeline.
+Zoom or pan the graph, select a node to inspect its metadata and related steps,
+and switch between vertical and horizontal placement. Missing inputs are explicit;
+optional steps remain part of the displayed definition.
 
-### CLI reporting
-
-Use the packaged CLI when the user wants a markdown report from a `DataHub` class in a `.py` file.
-
-```bash
-pytred report sample_datahub.py SampleDataHub \
-  --input-table '{"name": "input_table", "keys": ["key"], "join": "left"}' \
-  > report_dataflow.md
-```
-
-Notes:
-
-- `pytred report` imports the target class from `file_path`.
-- Each `--input-table` is JSON with `name` and optional `keys` and `join`.
-- The report includes the class docstring, method docstrings, a markdown table, and a Mermaid graph.
+For a displayable HTML snapshot, use `visualize_datahub(hub, direction="LR")` from
+`pytred.helpers.visualize`. Each display captures the current definition; display
+again after changing it. The JavaScript libraries are bundled, so no CDN, Node.js,
+or widget manager is needed. The notebook must allow trusted HTML with JavaScript
+and sandboxed iframe support. Previous outputs remain independent snapshots.
+The old Mermaid renderer, image-export helper, and report CLI have been removed.
 
 ## Source Map
 
@@ -181,4 +173,4 @@ These paths belong to the [pytred source repository](https://github.com/skanehir
 - `examples/01_basic_preprocessing.ipynb`: subclass-based preprocessing walkthrough.
 - `examples/02_use_completed_data.ipynb`: `DataNode` composition workflow.
 - `examples/03_visualize_workflow.ipynb`: notebook visualization examples.
-- `docs/tutorials/cli.md`: `pytred report` usage.
+- `docs/tutorials/visualization.md`: notebook controls and environment requirements.
