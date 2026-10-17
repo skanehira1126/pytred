@@ -1,4 +1,6 @@
+from html import unescape
 import json
+import re
 
 from IPython.core.formatters import DisplayFormatter
 import polars as pl
@@ -54,13 +56,10 @@ def test_independent_steps_and_sparse_execution_order():
         def last(self):
             raise AssertionError("Visualization must not execute steps")
 
-    widget = visualize_datahub(IndependentHub(pl.DataFrame()))
-    try:
-        edges = [e["data"] for e in widget.elements if "source" in e["data"]]
-        assert {e["kind"] for e in edges} == {"join", "root"}
-        assert all(e["target"] == "output" for e in edges)
-    finally:
-        widget.close()
+    elements = collect_dataflow_elements(IndependentHub(pl.DataFrame()))
+    edges = [e["data"] for e in elements if "source" in e["data"]]
+    assert {e["kind"] for e in edges} == {"join", "root"}
+    assert all(e["target"] == "output" for e in edges)
 
 
 def test_input_joins_and_arbitrary_names_are_preserved():
@@ -93,78 +92,52 @@ def test_missing_optional_dependency_is_visible():
     )
 
 
-def test_notebook_formatter_uses_widget_mime_and_bundled_assets():
-    import ipywidgets
+def snapshot_document(view):
+    # 表示用iframeから内側のHTMLを取り出し、ブラウザへ渡す内容を検査する。
+    return unescape(re.search(r'srcdoc="([^"]*)"', view._repr_html_()).group(1))
 
+
+def snapshot_data(view):
+    document = snapshot_document(view)
+    return json.loads(re.search(r'id="pytred-data">(.*?)</script>', document).group(1))
+
+
+def test_notebook_formatter_uses_self_contained_html_without_widget_protocol():
     hub = DataHub(pl.DataFrame(), source=pl.DataFrame())
     bundle, _ = DisplayFormatter().format(hub)
-    view = bundle["application/vnd.jupyter.widget-view+json"]
-    # Inspect the actual comm state referenced by the displayed MIME bundle.
-    state = ipywidgets.Widget.get_manager_state()["state"][view["model_id"]]["state"]
-    assert state["elements"] == collect_dataflow_elements(hub)
-    assert "export" in state["_esm"]
-    assert "pytred-dataflow" in state["_css"]
-    assert bundle["text/plain"] == "DataflowWidget(3 nodes)"
-    hub.close_visualization()
+    assert "text/html" in bundle
+    assert "application/vnd.jupyter.widget-view+json" not in bundle
+    assert 'sandbox="allow-scripts"' in bundle["text/html"]
+    document = snapshot_document(visualize_datahub(hub))
+    assert "pytred-dataflow" in document
+    assert "Permission is hereby granted" in document
+    assert "<script src=" not in document
+    assert snapshot_data(visualize_datahub(hub))["elements"] == collect_dataflow_elements(hub)
 
 
-def test_repeated_display_reuses_model_and_refreshes_graph():
-    import ipywidgets
-
+def test_html_snapshots_are_independent_and_refresh_only_when_created():
     hub = DataHub(pl.DataFrame(), source=pl.DataFrame())
-    formatter = DisplayFormatter()
-    try:
-        first, _ = formatter.format(hub)
-        model_id = first["application/vnd.jupyter.widget-view+json"]["model_id"]
-        model_ids = set(ipywidgets.Widget.get_manager_state()["state"])
-        # 同じhubの結合条件を変え、再表示で既存モデルの内容が更新されるか確認する。
-        hub.tables["source"].join = "left"
-        hub.tables["source"].keys = ["id"]
-        for _ in range(3):
-            bundle, _ = formatter.format(hub)
-            assert bundle["application/vnd.jupyter.widget-view+json"]["model_id"] == model_id
-        state = ipywidgets.Widget.get_manager_state()["state"]
-        assert set(state) == model_ids
-        assert state[model_id]["state"]["elements"] == collect_dataflow_elements(hub)
-        assert any(
-            e["data"].get("label") == "left: id" for e in state[model_id]["state"]["elements"]
-        )
-    finally:
-        hub.close_visualization()
+    first = visualize_datahub(hub, direction="LR")
+    hub.tables["source"].join = "left"
+    hub.tables["source"].keys = ["id"]
+    second = visualize_datahub(hub)
+    assert snapshot_data(first)["direction"] == "LR"
+    assert snapshot_data(second)["direction"] == "TB"
+    assert snapshot_data(first)["elements"] != snapshot_data(second)["elements"]
+    assert snapshot_data(second)["elements"] == collect_dataflow_elements(hub)
+    # 同じhubを繰り返し表示しても、HTMLを返すだけでPython側に表示状態を追加しない。
+    state = dict(vars(hub))
+    for _ in range(3):
+        assert hub._repr_html_() == second._repr_html_()
+    assert vars(hub) == state
 
 
-def test_closing_hub_visualization_releases_model_and_allows_redisplay():
-    import ipywidgets
-
-    hub = DataHub(pl.DataFrame(), source=pl.DataFrame())
-    other = DataHub(pl.DataFrame(), source=pl.DataFrame())
-    formatter = DisplayFormatter()
-    try:
-        first, _ = formatter.format(hub)
-        second, _ = formatter.format(other)
-        model_id = first["application/vnd.jupyter.widget-view+json"]["model_id"]
-        other_id = second["application/vnd.jupyter.widget-view+json"]["model_id"]
-        assert model_id != other_id
-        hub.close_visualization()
-        hub.close_visualization()
-        state = ipywidgets.Widget.get_manager_state()["state"]
-        assert model_id not in state
-        assert other_id in state
-        redisplayed, _ = formatter.format(hub)
-        assert redisplayed["application/vnd.jupyter.widget-view+json"]["model_id"] != model_id
-    finally:
-        hub.close_visualization()
-        other.close_visualization()
-
-
-def test_widget_instances_have_independent_state():
-    first = visualize_datahub(DataHub(pl.DataFrame(), source=pl.DataFrame()), direction="LR")
-    second = visualize_datahub(DataHub(pl.DataFrame(), other=pl.DataFrame()))
-    try:
-        assert first.model_id != second.model_id
-        assert first.direction == "LR"
-        assert second.direction == "TB"
-        assert first.elements != second.elements
-    finally:
-        first.close()
-        second.close()
+def test_pipeline_text_cannot_escape_json_script_or_iframe():
+    name = '</script><script>window.injected=true</script><img src=x onerror="alert(1)">'
+    hub = DataHub(pl.DataFrame(), DataNode(pl.DataFrame(), keys=None, join=None, name=name))
+    view = visualize_datahub(hub)
+    document = snapshot_document(view)
+    assert name not in document
+    assert name in [e["data"].get("label") for e in snapshot_data(view)["elements"]]
+    # JSON用・実行用の2つ以外のscriptタグが生成されていない。
+    assert document.count("</script>") == 2

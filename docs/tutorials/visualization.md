@@ -9,10 +9,9 @@ from IPython.display import display
 display(hub)
 ```
 
-Repeated `display(hub)` calls reuse the same widget model and comm. Each call
-refreshes the graph definition, including views of that hub already displayed
-in other cells. When finished, call `hub.close_visualization()` to close the
-model and all its views. Displaying the hub afterward creates a new widget.
+Each display is an independent snapshot of the current DataHub definition.
+Changing or replacing the hub does not modify previous outputs. Display it again
+to inspect its new state. No widget model, comm, or explicit close is needed.
 
 The graph shows the pipeline definition without executing any transformation.
 Input tables are blue, processing steps are gray, and the output is green.
@@ -27,7 +26,7 @@ downstream dependencies and show its docstring and join metadata. **Fit** frames
 the graph and **Reset** restores automatic placement. **Direction** switches
 between top-to-bottom and left-to-right placement.
 
-For an explicit widget, including a horizontal initial layout:
+For a displayable HTML snapshot with a horizontal initial layout:
 
 ```python
 from pytred.helpers.visualize import visualize_datahub
@@ -37,23 +36,21 @@ view = visualize_datahub(hub, direction="LR")
 display(view)
 ```
 
-Each explicit widget captures an independent snapshot of the definition.
-Create a new widget after changing the pipeline. Call `view.close()` when it is
-no longer needed; `hub.close_visualization()` does not close explicit widgets.
+The returned view stores HTML only. Its graph remains interactive in the browser
+without a live connection to Python.
 
 ## Installation and display environments
 
-`pip install pytred` installs the Python dependencies, including `anywidget`.
-Cytoscape.js, Dagre, and the widget styles are included in the Python package.
-No Node.js installation, CDN access, or initialization cell is needed to display
-a graph. The notebook frontend must have a working Jupyter Widgets manager;
-if the frontend and kernel use separate environments, both need their respective
-widget support installed. The bundled graph code does not make network requests.
+Cytoscape.js, Dagre, styles, and third-party license notices are embedded in the
+HTML output from the assets bundled with pytred. No Node.js installation, CDN,
+widget manager, or initialization cell is needed.
 
-`DataHub._repr_mimebundle_()` supplies the interactive widget. HTML-only clients
-can use `_repr_html_()` for a static summary; this summary is not a graph.
-A saved notebook is not a standalone HTML application, and static Markdown/HTML
-renderers do not automatically display the interactive widget.
+`DataHub._repr_html_()` returns a sandboxed iframe containing the graph snapshot.
+The notebook must allow trusted HTML with JavaScript and iframe `srcdoc` support.
+An untrusted notebook or a renderer that strips scripts/iframes cannot show the
+interactive graph. Trust and rerun the notebook when appropriate. Exported HTML
+can retain the graph if the exporter preserves the iframe; Markdown and GitHub's
+notebook preview do not provide this interactive display.
 
 The previous Mermaid renderer, image-export helper, and `pytred report` CLI
 have been removed. Report and image export are not provided by this version.

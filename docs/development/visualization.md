@@ -1,19 +1,17 @@
-# Maintaining the notebook widget
+# Maintaining the notebook graph
 
 `src/pytred/helpers/visualize.py` converts DataHub metadata to JSON-compatible
-nodes and edges and provides the anywidget view. It does not run transformations.
-DataHub owns and reuses its display widget, refreshing its elements on each
-display. `close_visualization()` releases it and closes all associated views.
-Explicit `visualize_datahub()` calls create independent caller-owned widgets.
+nodes and edges and embeds a snapshot in HTML. It does not run transformations.
 IDs are generated independently of table names, including the root and output.
 Missing dependencies are explicit nodes; input joins use the input DataNode's
 actual join metadata. Execution-order values are inspection metadata, not ranks.
 
-`frontend/widget.js` owns interaction and drawing. Dagre places the nodes from
-actual edges; Cytoscape.js renders the graph. Each anywidget view owns a separate
-Cytoscape instance. The AFM cleanup callback removes model listeners, disconnects
-the resize observer, and destroys the renderer. User-provided strings are passed
-as graph data or DOM text, never interpolated into HTML.
+`frontend/dataflow.js` owns interaction and drawing. Dagre places nodes from
+actual edges; Cytoscape.js renders the graph. Each output has an isolated,
+sandboxed iframe with inline JS, CSS, and JSON. No Python model, event subscription,
+or comm survives display. Removing the output discards the iframe document.
+User-provided strings are escaped for JSON script text and the HTML attribute;
+the frontend inserts them as graph data or DOM text, never HTML.
 
 ## Rebuild the bundled assets
 
@@ -31,7 +29,7 @@ bundle has no external imports. Following NumPy's bundled-license inventory form
 containing file, license, and path to its full license text. The build copies the
 original license files of Cytoscape.js, Dagre, and Graphlib unchanged into
 `src/pytred/static/licenses/`. Both the inventory and license files ship in wheels
-and source distributions; no license display is added to the widget UI.
+and source distributions; no license display is added to the graph UI.
 Review the notices and transitive dependencies when updating
 versions. Python wheel/sdist builds use these checked-in assets and do not invoke
 npm. End users do not need Node.js.
@@ -50,7 +48,7 @@ npm run build --prefix frontend
 uv build
 ```
 
-Python tests cover graph semantics and the widget MIME bundle. CI rebuilds the
+Python tests cover graph semantics, HTML snapshots, and safe data embedding. CI rebuilds the
 assets and rejects stale bundles. Browser interactions are not automatically
 tested; check rendering and interaction in a Jupyter notebook when changing the
-widget or its JavaScript dependencies.
+graph or its JavaScript dependencies.

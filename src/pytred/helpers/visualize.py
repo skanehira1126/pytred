@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from dataclasses import field
 from html import escape
 import inspect
+import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import Literal
-
-import anywidget
-import traitlets
 
 from pytred.helpers.decorator import get_metadata
 
@@ -18,28 +18,14 @@ if TYPE_CHECKING:
     from pytred.data_hub import DataHub
 
 
-class DataflowWidget(anywidget.AnyWidget):
-    """A snapshot of a pipeline displayed with bundled Cytoscape.js and Dagre.
+@dataclass(frozen=True)
+class DataflowView:
+    """An HTML snapshot with browser-only interaction and no live Python model."""
 
-    Pan or zoom the graph, select a node to inspect its metadata and dependencies,
-    and use Fit or Reset to restore the view. Display a new widget after changing
-    the pipeline definition. Rendering never executes the pipeline.
-    """
+    html: str = field(repr=False)
 
-    # anywidgetは_esmのJSをブラウザで読み込み、表示時にrender({model, el})を呼ぶ。
-    # ここでは同梱済みファイルの本文を渡す。_cssは表示に使うスタイルシート。
-    _esm = (Path(__file__).parents[1] / "static" / "widget.js").read_text(encoding="utf-8")
-    _css = (Path(__file__).parents[1] / "static" / "widget.css").read_text(encoding="utf-8")
-
-    # traitletsで型検証・変更通知を持つ属性を定義する。sync=TrueはWidget側が
-    # PythonとJSの共有対象として扱う印で、JSではmodel.get("elements")等で読む。
-    # elementsはノードと矢印の辞書のリスト。DataHub自体を監視する属性ではない。
-    elements = traitlets.List(traitlets.Dict()).tag(sync=True)
-    # 配置方向はTB（上→下）かLR（左→右）のみ許可し、初期値はTBとする。
-    direction = traitlets.Enum(["TB", "LR"], default_value="TB").tag(sync=True)
-
-    def __repr__(self):
-        return f"DataflowWidget({sum('source' not in e['data'] for e in self.elements)} nodes)"
+    def _repr_html_(self):
+        return self.html
 
 
 def collect_dataflow_elements(datahub: DataHub) -> list[dict]:
@@ -128,22 +114,37 @@ def collect_dataflow_elements(datahub: DataHub) -> list[dict]:
     return nodes + edges
 
 
-def visualize_datahub(
-    datahub: DataHub, *, direction: Literal["TB", "LR"] = "TB"
-) -> DataflowWidget:
-    """Create an interactive widget without running the DataHub.
+def visualize_datahub(datahub: DataHub, *, direction: Literal["TB", "LR"] = "TB") -> DataflowView:
+    """Create a displayable HTML snapshot without executing the DataHub.
 
-    Requires a notebook frontend with Jupyter Widgets support. The graph libraries
-    are bundled with pytred; rendering does not fetch them from a CDN.
+    Requires trusted HTML output with JavaScript and iframe support. The graph
+    libraries are bundled; no widget manager, comm, or CDN is used.
     """
-    return DataflowWidget(elements=collect_dataflow_elements(datahub), direction=direction)
+    return DataflowView(render_datahub_html(datahub, direction=direction))
 
 
-def render_datahub_html(datahub: DataHub) -> str:
-    """Provide a static summary for HTML-only frontends, without JavaScript."""
+def render_datahub_html(datahub: DataHub, *, direction: Literal["TB", "LR"] = "TB") -> str:
+    """Embed graph data and bundled assets in an isolated HTML document."""
+    if direction not in ("TB", "LR"):
+        raise ValueError("direction must be 'TB' or 'LR'")
+    assets = Path(__file__).parents[1] / "static"
+    script = (assets / "dataflow.js").read_text(encoding="utf-8")
+    style = (assets / "dataflow.css").read_text(encoding="utf-8")
+    # JSON is script text, not HTML: escape '<' so names/docstrings cannot close
+    # the data script. The entire document is then escaped for the srcdoc attribute.
+    payload = json.dumps(
+        {"elements": collect_dataflow_elements(datahub), "direction": direction}
+    ).replace("<", "\\u003c")
+    document = (
+        '<!doctype html><html><head><meta charset="utf-8">'
+        f"<style>body {{ margin: 0; }}{style}</style></head><body>"
+        f'<script type="application/json" id="pytred-data">{payload}</script>'
+        f"<script>{script}</script></body></html>"
+    )
     names = ", ".join(escape(name) for name in datahub.table_order)
     return (
         f"<div><strong>{escape(type(datahub).__name__)}</strong>: {names}"
-        "<p>Interactive graph requires a notebook frontend with Jupyter Widgets support.</p>"
-        "</div>"
+        '<iframe title="DataHub pipeline graph" sandbox="allow-scripts" '
+        'style="width:100%;height:760px;border:0" '
+        f'srcdoc="{escape(document, quote=True)}"></iframe></div>'
     )

@@ -1,5 +1,5 @@
 {
-  "name": "pytred-widget",
+  "name": "pytred-dataflow",
   "private": true,
   "type": "module",
   "scripts": {

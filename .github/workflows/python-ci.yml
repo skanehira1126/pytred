@@ -73,8 +73,8 @@ jobs:
       - name: Import package
         run: python -c "import pytred; print(pytred.__version__)"
 
-  widget:
-    name: Bundled notebook widget
+  graph:
+    name: Bundled notebook graph
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

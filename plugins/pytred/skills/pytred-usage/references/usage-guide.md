@@ -151,16 +151,16 @@ from IPython.display import display
 display(hub)
 ```
 
-The Cytoscape.js widget shows dependencies and joins without executing the pipeline.
+The Cytoscape.js graph shows dependencies and joins without executing the pipeline.
 Zoom or pan the graph, select a node to inspect its metadata and related steps,
 and switch between vertical and horizontal placement. Missing inputs are explicit;
 optional steps remain part of the displayed definition.
 
-For an explicit widget, use `visualize_datahub(hub, direction="LR")` from
-`pytred.helpers.visualize`. Each widget is a snapshot; display a new widget after
-changing the definition. `anywidget` is installed with pytred and the JavaScript
-libraries are bundled, so no CDN or Node.js is needed. The notebook frontend must
-support Jupyter Widgets. HTML-only display provides a static summary, not a graph.
+For a displayable HTML snapshot, use `visualize_datahub(hub, direction="LR")` from
+`pytred.helpers.visualize`. Each display captures the current definition; display
+again after changing it. The JavaScript libraries are bundled, so no CDN, Node.js,
+or widget manager is needed. The notebook must allow trusted HTML with JavaScript
+and sandboxed iframe support. Previous outputs remain independent snapshots.
 The old Mermaid renderer, image-export helper, and report CLI have been removed.
 
 ## Source Map

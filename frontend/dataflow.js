@@ -17,7 +17,7 @@ function arrange(cy, direction) {
   cy.fit(undefined, 32);
 }
 
-function render({ model, el }) {
+function render({ elements, direction: initialDirection }, el) {
   const root = document.createElement("section");
   root.className = "pytred-dataflow";
   // Only fixed markup goes through innerHTML. Pipeline names and docs use textContent.
@@ -102,16 +102,12 @@ function render({ model, el }) {
 
   function update() {
     cy.elements().remove();
-    cy.add(model.get("elements"));
-    direction.value = model.get("direction");
+    cy.add(elements);
+    direction.value = initialDirection;
     picker.replaceChildren(new Option("All nodes", ""));
     cy.nodes().forEach((node) => picker.add(new Option(node.data("label"), node.id())));
     arrange(cy, direction.value);
     inspectNode();
-  }
-  function changeDirection() {
-    direction.value = model.get("direction");
-    arrange(cy, direction.value);
   }
   cy.on("select unselect", "node", inspectNode);
   cy.on("tap", (event) => { if (event.target === cy) cy.nodes().unselect(); });
@@ -126,19 +122,16 @@ function render({ model, el }) {
     cy.nodes().unselect();
     arrange(cy, direction.value);
   });
-  model.on("change:elements", update);
-  model.on("change:direction", changeDirection);
   const observer = new ResizeObserver(() => cy.resize());
   observer.observe(canvas);
   update();
 
-  return () => {
-    model.off("change:elements", update);
-    model.off("change:direction", changeDirection);
+  window.addEventListener("pagehide", () => {
     observer.disconnect();
     cy.destroy();
     root.remove();
-  };
+  }, { once: true });
 }
 
-export default { render };
+// Each HTML output owns an isolated iframe; no Python model or comm is retained.
+render(JSON.parse(document.getElementById("pytred-data").textContent), document.body);

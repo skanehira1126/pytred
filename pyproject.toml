@@ -12,8 +12,6 @@ dependencies = [
     "typing-extensions>=4.10",
     "pyarrow>=11",
     "matplotlib",
-    "anywidget>=0.9.18,<0.10",
-    "traitlets>=5.9",
 ]
 readme = "README.md"
 requires-python = ">= 3.9"
