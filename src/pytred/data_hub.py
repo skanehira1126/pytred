@@ -44,6 +44,7 @@ class DataHub:
         """
 
         self.root_df = root_df
+        self._dataflow_widget: visualize.DataflowWidget | None = None
 
         # parse additional tables
         input_tables: list[DataNode] = []
@@ -346,8 +347,22 @@ class DataHub:
             ) from err
 
     def _repr_mimebundle_(self, **kwargs):
-        """Display the interactive dataflow through the notebook widget protocol."""
-        return visualize.visualize_datahub(self)._repr_mimebundle_(**kwargs)
+        """Reuse this hub's widget and refresh its graph without running tables."""
+        if self._dataflow_widget is None or self._dataflow_widget.comm is None:
+            self._dataflow_widget = visualize.visualize_datahub(self)
+        else:
+            self._dataflow_widget.elements = visualize.collect_dataflow_elements(self)
+        return self._dataflow_widget._repr_mimebundle_(**kwargs)
+
+    def close_visualization(self):
+        """Close this hub's display widget and all its views.
+
+        Displaying the hub again creates a new widget. Widgets created explicitly
+        with visualize_datahub() are independent and must be closed by the caller.
+        """
+        if self._dataflow_widget is not None:
+            self._dataflow_widget.close()
+            self._dataflow_widget = None
 
     def _repr_html_(self):
         """Provide a static summary for HTML-only frontends."""

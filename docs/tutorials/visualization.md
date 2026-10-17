@@ -9,6 +9,11 @@ from IPython.display import display
 display(hub)
 ```
 
+Repeated `display(hub)` calls reuse the same widget model and comm. Each call
+refreshes the graph definition, including views of that hub already displayed
+in other cells. When finished, call `hub.close_visualization()` to close the
+model and all its views. Displaying the hub afterward creates a new widget.
+
 The graph shows the pipeline definition without executing any transformation.
 Input tables are blue, processing steps are gray, and the output is green.
 Dashed edges show joins, including join methods and keys. Missing input tables
@@ -32,8 +37,9 @@ view = visualize_datahub(hub, direction="LR")
 display(view)
 ```
 
-Each widget captures a snapshot of the definition. Display a new widget after
-changing the pipeline. Call `view.close()` when it is no longer needed.
+Each explicit widget captures an independent snapshot of the definition.
+Create a new widget after changing the pipeline. Call `view.close()` when it is
+no longer needed; `hub.close_visualization()` does not close explicit widgets.
 
 ## Installation and display environments
 

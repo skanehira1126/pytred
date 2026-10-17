@@ -2,6 +2,9 @@
 
 `src/pytred/helpers/visualize.py` converts DataHub metadata to JSON-compatible
 nodes and edges and provides the anywidget view. It does not run transformations.
+DataHub owns and reuses its display widget, refreshing its elements on each
+display. `close_visualization()` releases it and closes all associated views.
+Explicit `visualize_datahub()` calls create independent caller-owned widgets.
 IDs are generated independently of table names, including the root and output.
 Missing dependencies are explicit nodes; input joins use the input DataNode's
 actual join metadata. Execution-order values are inspection metadata, not ranks.

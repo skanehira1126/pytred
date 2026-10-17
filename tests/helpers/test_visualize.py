@@ -105,6 +105,56 @@ def test_notebook_formatter_uses_widget_mime_and_bundled_assets():
     assert "export" in state["_esm"]
     assert "pytred-dataflow" in state["_css"]
     assert bundle["text/plain"] == "DataflowWidget(3 nodes)"
+    hub.close_visualization()
+
+
+def test_repeated_display_reuses_model_and_refreshes_graph():
+    import ipywidgets
+
+    hub = DataHub(pl.DataFrame(), source=pl.DataFrame())
+    formatter = DisplayFormatter()
+    try:
+        first, _ = formatter.format(hub)
+        model_id = first["application/vnd.jupyter.widget-view+json"]["model_id"]
+        model_ids = set(ipywidgets.Widget.get_manager_state()["state"])
+        # 同じhubの結合条件を変え、再表示で既存モデルの内容が更新されるか確認する。
+        hub.tables["source"].join = "left"
+        hub.tables["source"].keys = ["id"]
+        for _ in range(3):
+            bundle, _ = formatter.format(hub)
+            assert bundle["application/vnd.jupyter.widget-view+json"]["model_id"] == model_id
+        state = ipywidgets.Widget.get_manager_state()["state"]
+        assert set(state) == model_ids
+        assert state[model_id]["state"]["elements"] == collect_dataflow_elements(hub)
+        assert any(
+            e["data"].get("label") == "left: id" for e in state[model_id]["state"]["elements"]
+        )
+    finally:
+        hub.close_visualization()
+
+
+def test_closing_hub_visualization_releases_model_and_allows_redisplay():
+    import ipywidgets
+
+    hub = DataHub(pl.DataFrame(), source=pl.DataFrame())
+    other = DataHub(pl.DataFrame(), source=pl.DataFrame())
+    formatter = DisplayFormatter()
+    try:
+        first, _ = formatter.format(hub)
+        second, _ = formatter.format(other)
+        model_id = first["application/vnd.jupyter.widget-view+json"]["model_id"]
+        other_id = second["application/vnd.jupyter.widget-view+json"]["model_id"]
+        assert model_id != other_id
+        hub.close_visualization()
+        hub.close_visualization()
+        state = ipywidgets.Widget.get_manager_state()["state"]
+        assert model_id not in state
+        assert other_id in state
+        redisplayed, _ = formatter.format(hub)
+        assert redisplayed["application/vnd.jupyter.widget-view+json"]["model_id"] != model_id
+    finally:
+        hub.close_visualization()
+        other.close_visualization()
 
 
 def test_widget_instances_have_independent_state():
