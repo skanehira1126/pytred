@@ -26,9 +26,16 @@ class DataflowWidget(anywidget.AnyWidget):
     the pipeline definition. Rendering never executes the pipeline.
     """
 
+    # anywidgetは_esmのJSをブラウザで読み込み、表示時にrender({model, el})を呼ぶ。
+    # ここでは同梱済みファイルの本文を渡す。_cssは表示に使うスタイルシート。
     _esm = (Path(__file__).parents[1] / "static" / "widget.js").read_text(encoding="utf-8")
     _css = (Path(__file__).parents[1] / "static" / "widget.css").read_text(encoding="utf-8")
+
+    # traitletsで型検証・変更通知を持つ属性を定義する。sync=TrueはWidget側が
+    # PythonとJSの共有対象として扱う印で、JSではmodel.get("elements")等で読む。
+    # elementsはノードと矢印の辞書のリスト。DataHub自体を監視する属性ではない。
     elements = traitlets.List(traitlets.Dict()).tag(sync=True)
+    # 配置方向はTB（上→下）かLR（左→右）のみ許可し、初期値はTBとする。
     direction = traitlets.Enum(["TB", "LR"], default_value="TB").tag(sync=True)
 
     def __repr__(self):
