@@ -19,3 +19,9 @@ Version: 4.0.5
 Files: dataflow.js
 License: MIT
 For license text, see licenses/@dagrejs/graphlib/LICENSE
+
+Name: highlight.js
+Version: 11.11.1
+Files: dataflow.js
+License: BSD-3-Clause
+For license text, see licenses/highlight.js/LICENSE
