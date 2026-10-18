@@ -27,6 +27,7 @@ def test_graph_describes_dependencies_and_joins_without_execution():
         ("doubled", "process"),
         ("offset", "process"),
         ("combined", "process"),
+        ("01  LEFT JOIN", "join-step"),
         ("root_df", "root"),
         ("Output", "output"),
     ]
@@ -37,12 +38,18 @@ def test_graph_describes_dependencies_and_joins_without_execution():
         ("source", "offset", "dependency"),
         ("doubled", "combined", "dependency"),
         ("offset", "combined", "dependency"),
-        ("combined", "Output", "join"),
-        ("root_df", "Output", "root"),
+        ("combined", "01  LEFT JOIN", "join"),
+        ("root_df", "01  LEFT JOIN", "base"),
+        ("01  LEFT JOIN", "Output", "base"),
     }
     combined = next(n for n in nodes.values() if n["label"] == "combined")
     assert (combined["join"], combined["keys"], combined["order"]) == ("left", ["id"], 1)
     assert "Join both features." in combined["description"]
+    assert combined["implementation"].startswith('@polars_table(1, "id", join="left")')
+    assert "def combined(self, doubled, offset):" in combined["implementation"]
+    assert 'return doubled.join(offset, on="id")' in combined["implementation"]
+    assert "_wrapper" not in combined["implementation"]
+    assert nodes["table-0"]["implementation"] == ""
     assert list(hub.tables) == ["source"]
 
 
@@ -58,8 +65,11 @@ def test_independent_steps_and_sparse_execution_order():
 
     elements = collect_dataflow_elements(IndependentHub(pl.DataFrame()))
     edges = [e["data"] for e in elements if "source" in e["data"]]
-    assert {e["kind"] for e in edges} == {"join", "root"}
-    assert all(e["target"] == "output" for e in edges)
+    assert {e["kind"] for e in edges} == {"join", "base"}
+    assert [(e["source"], e["target"]) for e in edges if e["kind"] == "base"] == [
+        ("root", "join-1"),
+        ("join-1", "output"),
+    ]
 
 
 def test_input_joins_and_arbitrary_names_are_preserved():
@@ -74,7 +84,12 @@ def test_input_joins_and_arbitrary_names_are_preserved():
     assert [e["data"]["label"] for e in elements if e["data"]["kind"] == "input"] == names
     joins = [e["data"] for e in elements if e["data"]["kind"] == "join"]
     assert len(joins) == 3
-    assert all(e["label"] == 'left: a|b<"c' for e in joins)
+    steps = [e["data"] for e in elements if e["data"]["kind"] == "join-step"]
+    assert [(s["table"], s["sequence"]) for s in steps] == list(zip(names, [1, 2, 3]))
+    assert all(s["join"] == "left" and s["keys"] == ['a|b<"c'] for s in steps)
+    assert [
+        (e["data"]["source"], e["data"]["target"]) for e in elements if e["data"]["kind"] == "base"
+    ] == [("root", "join-1"), ("join-1", "join-2"), ("join-2", "join-3"), ("join-3", "output")]
     assert "</script>" not in hub._repr_html_()
     assert "&lt;/script&gt;" in hub._repr_html_()
 
@@ -86,10 +101,27 @@ def test_missing_optional_dependency_is_visible():
     assert missing[0]["label"] == "source"
     prepared = next(e["data"] for e in elements if e["data"].get("label") == "prepared")
     assert prepared["optional"] is True
+    join = next(e["data"] for e in elements if e["data"].get("kind") == "join-step")
+    assert join["optional"] is True
+    assert join["table"] == "result"
     assert any(
         e["data"].get("source") == missing[0]["id"] and e["data"].get("target") == prepared["id"]
         for e in elements
     )
+
+
+def test_input_join_precedes_generated_join():
+    hub = BranchingHub(
+        pl.DataFrame(),
+        DataNode(pl.DataFrame(), keys=None, join="cross", name="attributes"),
+        source=pl.DataFrame(),
+    )
+    elements = collect_dataflow_elements(hub)
+    joins = [e["data"] for e in elements if e["data"]["kind"] == "join-step"]
+    assert [(j["table"], j["join"], j["keys"]) for j in joins] == [
+        ("attributes", "cross", []),
+        ("combined", "left", ["id"]),
+    ]
 
 
 def snapshot_document(view):
@@ -117,12 +149,13 @@ def test_notebook_formatter_uses_self_contained_html_without_widget_protocol():
 
 def test_html_snapshots_are_independent_and_refresh_only_when_created():
     hub = DataHub(pl.DataFrame(), source=pl.DataFrame())
-    first = visualize_datahub(hub, direction="LR")
+    first = visualize_datahub(hub, direction="TB")
     hub.tables["source"].join = "left"
     hub.tables["source"].keys = ["id"]
     second = visualize_datahub(hub)
-    assert snapshot_data(first)["direction"] == "LR"
-    assert snapshot_data(second)["direction"] == "TB"
+    assert snapshot_data(first)["direction"] == "TB"
+    assert snapshot_data(second)["direction"] == "LR"
+    assert not any(e["data"]["kind"] == "join-step" for e in snapshot_data(first)["elements"])
     assert snapshot_data(first)["elements"] != snapshot_data(second)["elements"]
     assert snapshot_data(second)["elements"] == collect_dataflow_elements(hub)
     # 同じhubを繰り返し表示しても、HTMLを返すだけでPython側に表示状態を追加しない。
@@ -140,4 +173,35 @@ def test_pipeline_text_cannot_escape_json_script_or_iframe():
     assert name not in document
     assert name in [e["data"].get("label") for e in snapshot_data(view)["elements"]]
     # JSON用・実行用の2つ以外のscriptタグが生成されていない。
+    assert document.count("</script>") == 2
+
+
+def test_dynamic_function_without_source_keeps_description():
+    namespace = {}
+    exec(
+        'def generated(self):\n    "A generated step."\n    raise AssertionError("not run")',
+        namespace,
+    )
+    hub_type = type(
+        "DynamicHub", (DataHub,), {"generated": polars_table(0)(namespace["generated"])}
+    )
+    elements = collect_dataflow_elements(hub_type(pl.DataFrame()))
+    step = next(e["data"] for e in elements if e["data"].get("kind") == "process")
+    assert step["implementation"] == ""
+    assert step["description"] == "A generated step."
+
+
+def test_implementation_is_embedded_as_text_without_executing():
+    class SourceHub(DataHub):
+        @polars_table(0)
+        def payload(self):
+            text = "</script><script>window.injected=true</script>"
+            raise AssertionError(text)
+
+    view = visualize_datahub(SourceHub(pl.DataFrame()))
+    document = snapshot_document(view)
+    step = next(
+        e["data"] for e in snapshot_data(view)["elements"] if e["data"].get("kind") == "process"
+    )
+    assert "</script><script>window.injected=true</script>" in step["implementation"]
     assert document.count("</script>") == 2

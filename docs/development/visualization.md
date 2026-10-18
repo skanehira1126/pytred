@@ -6,12 +6,14 @@ IDs are generated independently of table names, including the root and output.
 Missing dependencies are explicit nodes; input joins use the input DataNode's
 actual join metadata. Execution-order values are inspection metadata, not ranks.
 
-`frontend/dataflow.js` owns interaction and drawing. Dagre places nodes from
-actual edges; Cytoscape.js renders the graph. Each output has an isolated,
+`frontend/dataflow.js` owns interaction and drawing. Dagre places preparation
+nodes from dependency edges; the base path follows the declared join sequence.
+Cytoscape.js renders the graph. Each output has an isolated,
 sandboxed iframe with inline JS, CSS, and JSON. No Python model, event subscription,
 or comm survives display. Removing the output discards the iframe document.
 User-provided strings are escaped for JSON script text and the HTML attribute;
-the frontend inserts them as graph data or DOM text, never HTML.
+the frontend inserts them as graph data or DOM text. Python source alone passes
+through highlight.js, which escapes source text before returning highlighted HTML.
 
 ## Rebuild the bundled assets
 
@@ -27,7 +29,7 @@ Commit `frontend/package-lock.json` and the generated files under
 bundle has no external imports. Following NumPy's bundled-license inventory format,
 `src/pytred/static/LICENSES_bundled.txt` lists each bundled library's name, version,
 containing file, license, and path to its full license text. The build copies the
-original license files of Cytoscape.js, Dagre, and Graphlib unchanged into
+original license files of Cytoscape.js, Dagre, Graphlib, and highlight.js unchanged into
 `src/pytred/static/licenses/`. Both the inventory and license files ship in wheels
 and source distributions; no license display is added to the graph UI.
 Review the notices and transitive dependencies when updating
@@ -39,6 +41,10 @@ are grouped; major updates remain separate. For an update PR, regenerate and
 commit the bundled assets and license notices before merging. The existing CI
 build comparison detects stale assets. Dependabot does not rebuild or release
 the Python package.
+
+The MkDocs hook in `docs/hooks/visualization.py` embeds the snapshot from
+`docs/demos/viewer_sample.py` into the visualization tutorial at build time.
+GitHub Pages serves this static demo without a Python server or external assets.
 
 ## Verify
 
