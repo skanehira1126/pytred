@@ -10,7 +10,7 @@ from typing import ClassVar
 
 import polars as pl
 
-from pytred._types import POLARS_JOIN_METHOD
+from pytred._types import PolarsJoinMethod
 from pytred.data_node import DataNode
 from pytred.data_node import EmptyDataNode
 from pytred.exceptions import TableNotFoundError
@@ -21,7 +21,7 @@ from pytred.metadata import TableMetadata
 
 logger = getLogger(__name__)
 
-TableJoinMethod = dict[str, POLARS_JOIN_METHOD | None]
+TableJoinMethod = dict[str, PolarsJoinMethod | None]
 TableJoinKeys = dict[str, Sequence[str]]
 TableExecutionOrders = dict[str, int]
 

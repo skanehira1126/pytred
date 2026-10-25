@@ -4,7 +4,7 @@ from typing import Generic
 
 import polars as pl
 
-from pytred._types import POLARS_JOIN_METHOD
+from pytred._types import PolarsJoinMethod
 from pytred.metadata import RoleT
 from pytred.metadata import TableMetadata
 
@@ -24,7 +24,7 @@ class EmptyDataNode(Generic[RoleT]):
         Name of the skipped processing method.
     keys : Sequence[str] or None
         Declared join keys, retained even though no join is performed.
-    join : POLARS_JOIN_METHOD or None
+    join : PolarsJoinMethod or None
         Declared join strategy.
     is_optional : bool, default False
         Whether the processing method is optional. DataHub sets this to True
@@ -42,7 +42,7 @@ class EmptyDataNode(Generic[RoleT]):
 
     name: str
     keys: Sequence[str] | None
-    join: POLARS_JOIN_METHOD | None
+    join: PolarsJoinMethod | None
     is_optional: bool = False
     metadata: TableMetadata[RoleT] | None = None
 
@@ -63,7 +63,7 @@ class DataNode(Generic[RoleT]):
     keys : Sequence[str] or None
         Columns used to join this table into root_df. Use None for cross joins
         or when join is None. These are join keys, not metadata primary keys.
-    join : POLARS_JOIN_METHOD or None
+    join : PolarsJoinMethod or None
         Join strategy used by DataHub. None keeps the table available as a
         dependency without joining it into root_df.
     name : str
@@ -97,6 +97,6 @@ class DataNode(Generic[RoleT]):
 
     table: pl.DataFrame
     keys: Sequence[str] | None
-    join: POLARS_JOIN_METHOD | None
+    join: PolarsJoinMethod | None
     name: str
     metadata: TableMetadata[RoleT] | None = None
