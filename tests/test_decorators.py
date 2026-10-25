@@ -1,15 +1,20 @@
+from typing import Literal
+
 import polars as pl
 from polars.testing import assert_frame_equal
 import pytest
 
 from pytred.decorators import polars_table
+from pytred.decorators.polars import polars_optional_table
 from pytred.exceptions import DuplicatedError
 from pytred.exceptions import InvalidReturnValueError
 from pytred.helpers.decorator import get_metadata
+from pytred.metadata import TableMetadata
 
 
 @pytest.mark.parametrize("keys, join", [(("id",), "left"), ((), None)])
 def test_preserve_frame_and_metadata(keys, join):
+    """Preserve execution settings and default omitted table metadata to None."""
     frame = pl.DataFrame({"id": [1], "value": [10]})
 
     @polars_table(2, *keys, join=join, is_optional=True)
@@ -21,6 +26,23 @@ def test_preserve_frame_and_metadata(keys, join):
     assert get_metadata(table, "keys") == (keys or None)
     assert get_metadata(table, "join") == join
     assert get_metadata(table, "is_optional") is True
+    assert get_metadata(table, "metadata") is None
+
+
+@pytest.mark.parametrize(
+    "decorate", [polars_table, polars_optional_table], ids=["regular", "optional"]
+)
+def test_read_table_metadata_without_execution(decorate):
+    """Expose the supplied project metadata on a class method without executing it."""
+    metadata = TableMetadata[Literal["feature"]](roles=("feature",))
+
+    class Pipeline:
+        @decorate(0, metadata=metadata)
+        def features(self):
+            pytest.fail("Reading metadata must not execute the processing method")
+
+    assert get_metadata(Pipeline.features, "metadata") is metadata
+    assert get_metadata(Pipeline().features, "metadata") is metadata
 
 
 @pytest.mark.parametrize("order", [1.5, -1], ids=["non_integer", "negative"])

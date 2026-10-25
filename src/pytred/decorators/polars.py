@@ -1,15 +1,16 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from functools import partial
 from functools import wraps
 from logging import getLogger
-from typing import Callable
 
 import polars as pl
 
 from pytred._types import POLARS_JOIN_METHOD
 from pytred.exceptions import DuplicatedError
 from pytred.exceptions import InvalidReturnValueError
+from pytred.metadata import TableMetadata
 
 
 logger = getLogger(__name__)
@@ -34,12 +35,14 @@ def _set_metadata_to_function(
     join: POLARS_JOIN_METHOD | None,
     keys: tuple[str, ...],
     is_optional: bool,
+    metadata: TableMetadata | None = None,
 ):
     wrapper.__pytred_meta__ = {
         "table_process_order": order,
         "join": join,
         "keys": None if (len(keys) == 0 or keys[0] is None) else keys,
         "is_optional": is_optional,
+        "metadata": metadata,
     }
 
     return wrapper
@@ -51,6 +54,7 @@ def polars_table(
     join: POLARS_JOIN_METHOD | None = None,
     is_validate_unique: bool = True,
     is_optional: bool = False,
+    metadata: TableMetadata | None = None,
 ):
     """
     Decorator class for adding metadata to data processing functions, specifying their order of
@@ -74,6 +78,8 @@ def polars_table(
         function. If True, a check for duplicate entries based on the keys is performed.
     is_optional: bool, default False
         If True, do not execute if input table does not exist
+    metadata: TableMetadata, optional
+        Metadata of output Table
 
     Raises
     ------
@@ -136,6 +142,7 @@ def polars_table(
             join=join,
             keys=keys,
             is_optional=is_optional,
+            metadata=metadata,
         )
 
         return _wrapper

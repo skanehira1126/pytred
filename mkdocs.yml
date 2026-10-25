@@ -1,4 +1,6 @@
 site_name: "Pytred: Python Tools for Refinement and Enhancement of Data"
+hooks:
+  - docs/hooks/visualization.py
 theme:
   name: "material"
 nav:
