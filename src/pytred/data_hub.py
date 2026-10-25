@@ -5,6 +5,7 @@ from functools import reduce
 import inspect
 from logging import getLogger
 from operator import and_
+from typing import ClassVar
 
 import polars as pl
 
@@ -14,6 +15,7 @@ from pytred.data_node import EmptyDataNode
 from pytred.exceptions import TableNotFoundError
 from pytred.helpers import visualize
 from pytred.helpers.decorator import get_metadata
+from pytred.metadata import TableMetadata
 
 
 logger = getLogger(__name__)
@@ -27,6 +29,8 @@ class DataHub:
     table_join_info: TableJoinMethod | None = None
     table_join_keys: TableJoinKeys | None = None
     registerd_tables_order: TableExecutionOrders | None = None
+
+    metadata: ClassVar[TableMetadata | None] = None
 
     def __init__(
         self,
@@ -80,11 +84,17 @@ class DataHub:
         if len(self.table_order) == 0:
             raise TableNotFoundError(f"There are no table in {self.__class__.__name__}.")
 
-    def __init_subclass__(cls, **kwargs):
+    def __init_subclass__(
+        cls,
+        *,
+        metadata: TableMetadata | None = None,
+        **kwargs,
+    ):
         """
         Collects annotated functions and their execution order when initializing a subclass.
         """
         super().__init_subclass__(**kwargs)
+        cls.metadata = metadata
 
         cls.table_join_info = {}
         cls.table_join_keys = {}
@@ -302,6 +312,7 @@ class DataHub:
                     join=self.table_join_info[name],
                     keys=self.table_join_keys.get(name),
                     is_optional=True,
+                    metadata=get_metadata(process_fn, "metadata"),
                 )
             else:
                 table = process_fn(*[self.get(table_name).table for table_name in arg_table_names])
@@ -310,6 +321,7 @@ class DataHub:
                     self.table_join_keys.get(name),
                     join=self.table_join_info[name],
                     name=name,
+                    metadata=get_metadata(process_fn, "metadata"),
                 )
 
     def post_step(self, df: pl.DataFrame) -> pl.DataFrame:
