@@ -3,7 +3,6 @@ import json
 
 import pytest
 
-from pytred.cli.cli import print_datahub_metadata
 from pytred.data_hub import DataHub
 from pytred.decorators import polars_table
 from pytred.helpers.metadata import get_datahub_metadata
@@ -45,7 +44,19 @@ def test_collect_metadata_without_execution(capsys):
     json.dumps(result)
 
 
-def test_cli_prints_metadata(capsys):
-    print_datahub_metadata(f"{__name__}:MetadataHub")
+def test_collect_configured_output_metadata():
+    class OutputHub(DataHub, metadata=TableMetadata(updated_on=date(2026, 10, 25))):
+        pass
 
-    assert json.loads(capsys.readouterr().out) == get_datahub_metadata(MetadataHub)
+    result = get_datahub_metadata(OutputHub)
+
+    assert result["DataHub"]["name"] == f"{OutputHub.__module__}:{OutputHub.__qualname__}"
+    assert result["DataHub"]["metadata_status"] == "defined"
+    assert result["DataHub"]["metadata"]["updated_on"] == "2026-10-25"
+    assert result["tables"] == []
+
+
+@pytest.mark.parametrize("target", [object(), int], ids=["instance", "unrelated_class"])
+def test_reject_non_datahub_target(target):
+    with pytest.raises(TypeError, match="DataHub subclass"):
+        get_datahub_metadata(target)
