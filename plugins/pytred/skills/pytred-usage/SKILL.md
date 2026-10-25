@@ -1,6 +1,6 @@
 ---
 name: pytred-usage
-description: Build, explain, or debug pytred pipelines with DataHub, DataNode, and @polars_table, including interactive notebook visualization. Excludes generic Polars work without pytred and Codex plugin installation.
+description: Build, explain, or debug pytred pipelines with DataHub, DataNode, and @polars_table, including metadata inspection via CLI and notebook visualization. Excludes generic Polars work without pytred and Codex plugin installation.
 ---
 
 # Pytred Usage
@@ -9,7 +9,7 @@ Help the user obtain the intended output table or understand a specific pytred b
 
 ## Choose the relevant guidance
 
-Read the relevant sections of the bundled [usage guide](references/usage-guide.md). Resolve its path relative to this skill, including when installed in another project.
+Read only the relevant guidance below. Section names refer to the bundled [usage guide](references/usage-guide.md); resolve paths relative to this skill, including when installed in another project.
 
 | Request | Sections to read |
 | --- | --- |
@@ -18,6 +18,7 @@ Read the relevant sections of the bundled [usage guide](references/usage-guide.m
 | Explain missing columns, skipped steps, or errors | Core Model; Inspect and Debug |
 | Explain post_step or output filters | Core Model |
 | Inspect a notebook workflow | Notebook Visualization |
+| Inspect metadata or use the pytred CLI | [CLI guide](references/cli-guide.md) |
 
 Use a `DataHub` subclass for reusable transformations and positional `DataNode` inputs for already computed tables. Keep the scope of the answer tied to the request; a usage explanation does not require creating a notebook.
 

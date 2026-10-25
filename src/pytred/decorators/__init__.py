@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 from typing import Literal
-
-from typing_extensions import TypeGuard
+from typing import TypeGuard
 
 from pytred._types import POLARS_JOIN_METHOD
 from pytred.decorators.polars import polars_table

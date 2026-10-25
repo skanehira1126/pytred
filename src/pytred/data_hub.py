@@ -1,27 +1,37 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from collections.abc import Sequence
 from functools import reduce
 import inspect
 from logging import getLogger
 from operator import and_
+from typing import ClassVar
 
 import polars as pl
 
+from pytred._types import POLARS_JOIN_METHOD
 from pytred.data_node import DataNode
 from pytred.data_node import EmptyDataNode
 from pytred.exceptions import TableNotFoundError
 from pytred.helpers import visualize
 from pytred.helpers.decorator import get_metadata
+from pytred.metadata import TableMetadata
 
 
 logger = getLogger(__name__)
 
+TableJoinMethod = dict[str, POLARS_JOIN_METHOD | None]
+TableJoinKeys = dict[str, Sequence[str]]
+TableExecutionOrders = dict[str, int]
+
 
 class DataHub:
-    table_join_info: dict[str, str] | None = None
-    table_join_keys: dict[str, Sequence[str]] | None = None
-    registerd_tables_order: dict[str, int] | None = None
+    table_join_info: TableJoinMethod | None = None
+    table_join_keys: TableJoinKeys | None = None
+    registered_tables_order: ClassVar[TableExecutionOrders] = {}
+
+    metadata: ClassVar[TableMetadata | None] = None
 
     def __init__(
         self,
@@ -55,12 +65,11 @@ class DataHub:
         if len(named_tables) >= 1:
             input_tables += self.parse_tables_to_node(**named_tables)
 
-        self.tables: dict[str, DataNode] = {}
+        self.tables: dict[str, DataNode | EmptyDataNode] = {}
         self.table_order = {}
 
         # User defined tables
-        if self.registerd_tables_order is not None:
-            self.table_order.update(self.registerd_tables_order)
+        self.table_order.update(self.registered_tables_order)
 
         # input tables
         for data_node in input_tables:
@@ -75,15 +84,21 @@ class DataHub:
         if len(self.table_order) == 0:
             raise TableNotFoundError(f"There are no table in {self.__class__.__name__}.")
 
-    def __init_subclass__(cls, **kwargs):
+    def __init_subclass__(
+        cls,
+        *,
+        metadata: TableMetadata | None = None,
+        **kwargs,
+    ):
         """
         Collects annotated functions and their execution order when initializing a subclass.
         """
         super().__init_subclass__(**kwargs)
+        cls.metadata = metadata
 
         cls.table_join_info = {}
         cls.table_join_keys = {}
-        cls.registerd_tables_order = {}
+        cls.registered_tables_order = {}
 
         # get annotated functions
         table_join_info, table_join_keys, table_order = cls._get_decorators()
@@ -91,7 +106,7 @@ class DataHub:
         # sort tables
         cls.table_join_info.update(table_join_info)
         cls.table_join_keys.update(table_join_keys)
-        cls.registerd_tables_order.update(table_order)
+        cls.registered_tables_order.update(table_order)
 
     @staticmethod
     def validate_tables_is_node(*tables) -> list[DataNode]:
@@ -111,7 +126,7 @@ class DataHub:
         """
         Parse `tables` to DataNode instance
         """
-        input_tables = []
+        input_tables: list[DataNode] = []
         for name, df in tables.items():
             if isinstance(df, pl.DataFrame):
                 input_tables.append(DataNode(df, keys=None, join=None, name=name))
@@ -130,7 +145,13 @@ class DataHub:
         return list_table_order
 
     @classmethod
-    def _get_decorators(cls) -> tuple[dict, dict, dict]:
+    def _get_decorators(
+        cls,
+    ) -> tuple[
+        TableJoinMethod,
+        TableJoinKeys,
+        TableExecutionOrders,
+    ]:
         """
         Collects and organizes information from annotated functions within the class.
         It extracts the function names, their associated join methods, and their execution order.
@@ -244,7 +265,7 @@ class DataHub:
     @classmethod
     def collect_table_and_arguments(
         cls, table_order: dict[str, int], include_input_table: bool = False
-    ):
+    ) -> Iterator[tuple[int, str, list[str]]]:
         list_table_order = cls.sort_tables_by_execute_order(table_order)
 
         for name, order in list_table_order:
@@ -291,6 +312,7 @@ class DataHub:
                     join=self.table_join_info[name],
                     keys=self.table_join_keys.get(name),
                     is_optional=True,
+                    metadata=get_metadata(process_fn, "metadata"),
                 )
             else:
                 table = process_fn(*[self.get(table_name).table for table_name in arg_table_names])
@@ -299,6 +321,7 @@ class DataHub:
                     self.table_join_keys.get(name),
                     join=self.table_join_info[name],
                     name=name,
+                    metadata=get_metadata(process_fn, "metadata"),
                 )
 
     def post_step(self, df: pl.DataFrame) -> pl.DataFrame:
@@ -317,7 +340,7 @@ class DataHub:
         """
         return df
 
-    def get(self, table_name: str) -> DataNode:
+    def get(self, table_name: str) -> DataNode | EmptyDataNode:
         """
         Retrieves a DataNode by its name.
 
@@ -328,8 +351,8 @@ class DataHub:
 
         Returns
         -------
-        DataNode
-            The requested DataNode object.
+        DataNode | EmptyDataNode
+            The requested DataNode or EmptyDataNode object.
 
         Raises
         ------
