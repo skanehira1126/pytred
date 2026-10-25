@@ -29,7 +29,6 @@ TableExecutionOrders = dict[str, int]
 class DataHub:
     table_join_info: TableJoinMethod | None = None
     table_join_keys: TableJoinKeys | None = None
-    registerd_tables_order: TableExecutionOrders | None = None
     registered_tables_order: ClassVar[TableExecutionOrders] = {}
 
     metadata: ClassVar[TableMetadata | None] = None
@@ -70,8 +69,7 @@ class DataHub:
         self.table_order = {}
 
         # User defined tables
-        if self.registerd_tables_order is not None:
-            self.table_order.update(self.registerd_tables_order)
+        self.table_order.update(self.registered_tables_order)
 
         # input tables
         for data_node in input_tables:
@@ -100,7 +98,7 @@ class DataHub:
 
         cls.table_join_info = {}
         cls.table_join_keys = {}
-        cls.registerd_tables_order = {}
+        cls.registered_tables_order = {}
 
         # get annotated functions
         table_join_info, table_join_keys, table_order = cls._get_decorators()
@@ -108,10 +106,7 @@ class DataHub:
         # sort tables
         cls.table_join_info.update(table_join_info)
         cls.table_join_keys.update(table_join_keys)
-        cls.registerd_tables_order.update(table_order)
-
-        # TODO: typo直したら消す
-        cls.registered_tables_order = cls.registerd_tables_order
+        cls.registered_tables_order.update(table_order)
 
     @staticmethod
     def validate_tables_is_node(*tables) -> list[DataNode]:
