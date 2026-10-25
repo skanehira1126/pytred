@@ -8,6 +8,7 @@ from operator import and_
 
 import polars as pl
 
+from pytred._types import POLARS_JOIN_METHOD
 from pytred.data_node import DataNode
 from pytred.data_node import EmptyDataNode
 from pytred.exceptions import TableNotFoundError
@@ -17,11 +18,15 @@ from pytred.helpers.decorator import get_metadata
 
 logger = getLogger(__name__)
 
+TableJoinMethod = dict[str, POLARS_JOIN_METHOD | None]
+TableJoinKeys = dict[str, Sequence[str]]
+TableExecutionOrders = dict[str, int]
+
 
 class DataHub:
-    table_join_info: dict[str, str] | None = None
-    table_join_keys: dict[str, Sequence[str]] | None = None
-    registerd_tables_order: dict[str, int] | None = None
+    table_join_info: TableJoinMethod | None = None
+    table_join_keys: TableJoinKeys | None = None
+    registerd_tables_order: TableExecutionOrders | None = None
 
     def __init__(
         self,
@@ -55,7 +60,7 @@ class DataHub:
         if len(named_tables) >= 1:
             input_tables += self.parse_tables_to_node(**named_tables)
 
-        self.tables: dict[str, DataNode] = {}
+        self.tables: dict[str, DataNode | EmptyDataNode] = {}
         self.table_order = {}
 
         # User defined tables
@@ -111,7 +116,7 @@ class DataHub:
         """
         Parse `tables` to DataNode instance
         """
-        input_tables = []
+        input_tables: list[DataNode] = []
         for name, df in tables.items():
             if isinstance(df, pl.DataFrame):
                 input_tables.append(DataNode(df, keys=None, join=None, name=name))
@@ -130,7 +135,13 @@ class DataHub:
         return list_table_order
 
     @classmethod
-    def _get_decorators(cls) -> tuple[dict, dict, dict]:
+    def _get_decorators(
+        cls,
+    ) -> tuple[
+        TableJoinMethod,
+        TableJoinKeys,
+        TableExecutionOrders,
+    ]:
         """
         Collects and organizes information from annotated functions within the class.
         It extracts the function names, their associated join methods, and their execution order.
@@ -317,7 +328,7 @@ class DataHub:
         """
         return df
 
-    def get(self, table_name: str) -> DataNode:
+    def get(self, table_name: str) -> DataNode | EmptyDataNode:
         """
         Retrieves a DataNode by its name.
 
@@ -328,8 +339,8 @@ class DataHub:
 
         Returns
         -------
-        DataNode
-            The requested DataNode object.
+        DataNode | EmptyDataNode
+            The requested DataNode or EmptyDataNode object.
 
         Raises
         ------
