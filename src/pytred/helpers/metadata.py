@@ -8,6 +8,7 @@ def get_datahub_metadata(hub_class: type[DataHub]) -> dict:
         raise TypeError("The target must be a DataHub subclass")
 
     datahub_name = f"{hub_class.__module__}:{hub_class.__qualname__}"
+    metadata_datahub: dict[str, object]
     if hub_class.metadata is None:
         metadata_datahub = {
             "name": datahub_name,

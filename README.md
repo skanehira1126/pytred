@@ -25,6 +25,39 @@ conditions, or switch the layout direction. Rendering does not execute the pipel
 Cytoscape.js and Dagre are bundled with the package; no CDN or Node.js is required.
 See the [visualization guide](docs/tutorials/visualization.md).
 
+## Metadata inspection
+
+Python 3.11 or later is required. Define table and column metadata with
+`pytred.metadata.TableMetadata` and `ColumnMetadata`. Pass table metadata to
+`@polars_table(..., metadata=...)` or declare output metadata on a DataHub subclass
+with `class MyDataHub(DataHub, metadata=...):`.
+
+Inspect an importable DataHub class from the command line:
+
+```bash
+pytred --version
+pytred metadata my_project.pipeline:MyDataHub
+```
+
+The same information is available as a JSON-compatible dictionary in Python:
+
+```python
+from pytred.helpers.metadata import get_datahub_metadata
+from my_project.pipeline import MyDataHub
+
+metadata = get_datahub_metadata(MyDataHub)
+```
+
+Inspection does not construct the DataHub or execute its processing methods.
+The CLI imports the target module, so its top-level code runs normally.
+The result contains `DataHub` and `tables`. Each entry has `metadata_status`:
+`defined` for configured metadata, `unset` for missing metadata, or `unsupported`
+for inferred input tables whose metadata cannot yet be declared. The `metadata`
+field is an object when defined and `null` otherwise in JSON.
+
+In 0.5.0, `DataHub.registerd_tables_order` is renamed to
+`DataHub.registered_tables_order`; update any direct references to the old name.
+
 ## Codex plugin
 
 This repository includes a Codex plugin that teaches AI agents how to use

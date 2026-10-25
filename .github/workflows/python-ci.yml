@@ -4,7 +4,6 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
 
 jobs:
   test:
@@ -16,7 +15,7 @@ jobs:
     strategy:
       matrix:
         platform: [ubuntu-latest]
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.11", "3.12"]
 
     steps:
       - uses: actions/checkout@v4
@@ -56,7 +55,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
         with:
-          python-version: "3.10"
+          python-version: "3.11"
 
       - name: Install build
         run: python -m pip install build
@@ -72,6 +71,9 @@ jobs:
 
       - name: Import package
         run: python -c "import pytred; print(pytred.__version__)"
+
+      - name: Check CLI entry point
+        run: pytred --version
 
   graph:
     name: Bundled notebook graph
