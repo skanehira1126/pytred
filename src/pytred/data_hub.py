@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from collections.abc import Sequence
 from functools import reduce
 import inspect
@@ -29,6 +30,7 @@ class DataHub:
     table_join_info: TableJoinMethod | None = None
     table_join_keys: TableJoinKeys | None = None
     registerd_tables_order: TableExecutionOrders | None = None
+    registered_tables_order: ClassVar[TableExecutionOrders] = {}
 
     metadata: ClassVar[TableMetadata | None] = None
 
@@ -107,6 +109,9 @@ class DataHub:
         cls.table_join_info.update(table_join_info)
         cls.table_join_keys.update(table_join_keys)
         cls.registerd_tables_order.update(table_order)
+
+        # TODO: typo直したら消す
+        cls.registered_tables_order = cls.registerd_tables_order
 
     @staticmethod
     def validate_tables_is_node(*tables) -> list[DataNode]:
@@ -265,7 +270,7 @@ class DataHub:
     @classmethod
     def collect_table_and_arguments(
         cls, table_order: dict[str, int], include_input_table: bool = False
-    ):
+    ) -> Iterator[tuple[int, str, list[str]]]:
         list_table_order = cls.sort_tables_by_execute_order(table_order)
 
         for name, order in list_table_order:
