@@ -18,7 +18,7 @@ class MetadataHub(DataHub):
     def first(self, source):
         pytest.fail("Metadata inspection must not execute table methods")
 
-    @polars_table(1)
+    @polars_table(1, is_optional=True)
     def second(self, source, first):
         pytest.fail("Metadata inspection must not execute table methods")
 
@@ -34,11 +34,14 @@ def test_collect_metadata_without_execution(capsys):
     assert source["metadata_status"] == "unsupported"
     assert source["metadata"] is None
     assert source["depends"] == []
+    assert source["is_optional"] is None
     assert first["metadata_status"] == "defined"
     assert first["metadata"]["updated_on"] == "2026-10-25"
+    assert first["is_optional"] is False
     assert second["metadata_status"] == "unset"
     assert second["metadata"] is None
     assert second["depends"] == ["source", "first"]
+    assert second["is_optional"] is True
     json.dumps(result)
 
 

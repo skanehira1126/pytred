@@ -55,6 +55,11 @@ The result contains `DataHub` and `tables`. Each entry has `metadata_status`:
 for inferred input tables whose metadata cannot yet be declared. The `metadata`
 field is an object when defined and `null` otherwise in JSON.
 
+Each table entry also includes `is_optional`: `true` or `false` for processing
+methods, and `null` for input tables where it does not apply. This describes
+whether a method can be skipped when dependencies are missing, not whether it
+was skipped during an execution.
+
 In 0.5.0, `DataHub.registerd_tables_order` is renamed to
 `DataHub.registered_tables_order`; update any direct references to the old name.
 

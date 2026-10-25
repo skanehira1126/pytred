@@ -30,12 +30,14 @@ def get_datahub_metadata(hub_class: type[DataHub]) -> dict:
     for order, table_name, depends in hub_class.collect_table_and_arguments(table_order):
         seen.append(table_name)
 
-        metadata = get_metadata(getattr(hub_class, table_name), "metadata")
+        function = getattr(hub_class, table_name)
+        metadata = get_metadata(function, "metadata")
         tables.append(
             {
                 "order": order,
                 "name": table_name,
                 "depends": depends,
+                "is_optional": get_metadata(function, "is_optional"),
                 "metadata_status": "defined" if metadata is not None else "unset",
                 "metadata": metadata.model_dump(mode="json") if metadata is not None else None,
             }
@@ -48,6 +50,7 @@ def get_datahub_metadata(hub_class: type[DataHub]) -> dict:
                         "order": -1,
                         "name": source,
                         "depends": [],
+                        "is_optional": None,
                         "metadata_status": "unsupported",
                         "metadata": None,
                     }
