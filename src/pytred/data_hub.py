@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from collections.abc import Mapping
 from collections.abc import Sequence
 from functools import reduce
 import inspect
@@ -10,7 +11,7 @@ from typing import ClassVar
 
 import polars as pl
 
-from pytred._types import POLARS_JOIN_METHOD
+from pytred._types import PolarsJoinMethod
 from pytred.data_node import DataNode
 from pytred.data_node import EmptyDataNode
 from pytred.exceptions import TableNotFoundError
@@ -21,7 +22,7 @@ from pytred.metadata import TableMetadata
 
 logger = getLogger(__name__)
 
-TableJoinMethod = dict[str, POLARS_JOIN_METHOD | None]
+TableJoinMethod = dict[str, PolarsJoinMethod | None]
 TableJoinKeys = dict[str, Sequence[str]]
 TableExecutionOrders = dict[str, int]
 
@@ -32,6 +33,7 @@ class DataHub:
     registered_tables_order: ClassVar[TableExecutionOrders] = {}
 
     metadata: ClassVar[TableMetadata | None] = None
+    input_tables: ClassVar[dict[str, TableMetadata | None]] = {}
 
     def __init__(
         self,
@@ -88,13 +90,25 @@ class DataHub:
         cls,
         *,
         metadata: TableMetadata | None = None,
+        input_tables: Mapping[str, TableMetadata | None] | None = None,
         **kwargs,
     ):
         """
         Collects annotated functions and their execution order when initializing a subclass.
+
+        input_tables maps input names to optional metadata, independently of runtime data.
+        Omission or None leaves declarations empty; parent declarations are not inherited.
+        Declarations describe the pipeline;
+        they do not modify runtime input nodes.
         """
         super().__init_subclass__(**kwargs)
         cls.metadata = metadata
+        cls.input_tables = dict(input_tables) if input_tables is not None else {}
+        for name, table_metadata in cls.input_tables.items():
+            if not isinstance(name, str) or not name:
+                raise TypeError("Input table names must be non-empty strings")
+            if table_metadata is not None and not isinstance(table_metadata, TableMetadata):
+                raise TypeError(f"Input table {name!r} metadata must be TableMetadata or None")
 
         cls.table_join_info = {}
         cls.table_join_keys = {}
@@ -107,12 +121,12 @@ class DataHub:
         cls.table_join_info.update(table_join_info)
         cls.table_join_keys.update(table_join_keys)
         cls.registered_tables_order.update(table_order)
+        if conflicts := cls.input_tables.keys() & table_order.keys():
+            raise ValueError(f"Input tables conflict with processing methods: {sorted(conflicts)}")
 
     @staticmethod
     def validate_tables_is_node(*tables) -> list[DataNode]:
-        """
-        Validate `tables` are DataNode instance.
-        """
+        """Validate that inputs are DataNode instances."""
         input_data_node = []
         for data_node in tables:
             if isinstance(data_node, DataNode):
@@ -124,7 +138,7 @@ class DataHub:
     @staticmethod
     def parse_tables_to_node(**tables) -> list[DataNode]:
         """
-        Parse `tables` to DataNode instance
+        Wrap named DataFrames as DataNodes.
         """
         input_tables: list[DataNode] = []
         for name, df in tables.items():

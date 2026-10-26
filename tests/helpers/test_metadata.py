@@ -22,6 +22,31 @@ class MetadataHub(DataHub):
         pytest.fail("Metadata inspection must not execute table methods")
 
 
+def test_declared_inputs_and_later_producers_are_distinct():
+    class Hub(
+        MetadataHub, input_tables={"source": TableMetadata(description="Source"), "unused": None}
+    ):
+        @polars_table(2)
+        def before(self, later, undeclared):
+            pytest.fail("Inspection must not execute methods")
+
+        @polars_table(3)
+        def later(self):
+            pytest.fail("Inspection must not execute methods")
+
+    tables = get_datahub_metadata(Hub)["tables"]
+    assert len([table for table in tables if table["name"] == "later"]) == 1
+    by_name = {table["name"]: table for table in tables}
+    assert by_name["source"]["metadata"]["description"] == "Source"
+    assert by_name["source"]["metadata_status"] == "defined"
+    assert by_name["unused"]["metadata_status"] == "unset"
+    assert len(tables) == len(by_name)
+    assert by_name["undeclared"]["metadata_status"] == "unset"
+    assert by_name["undeclared"]["metadata"] is None
+    assert by_name["before"]["depends"] == ["later", "undeclared"]
+    assert by_name["later"]["order"] == 3
+
+
 def test_collect_metadata_without_execution(capsys):
     result = get_datahub_metadata(MetadataHub)
 
@@ -30,10 +55,11 @@ def test_collect_metadata_without_execution(capsys):
     assert result["DataHub"]["metadata"] is None
     assert [table["name"] for table in result["tables"]] == ["source", "first", "second"]
     source, first, second = result["tables"]
-    assert source["metadata_status"] == "unsupported"
+    assert source["metadata_status"] == "unset"
     assert source["metadata"] is None
     assert source["depends"] == []
     assert source["is_optional"] is None
+    assert first["depends"] == ["source"]
     assert first["metadata_status"] == "defined"
     assert first["metadata"]["updated_on"] == "2026-10-25"
     assert first["is_optional"] is False

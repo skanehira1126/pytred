@@ -23,12 +23,20 @@ def get_datahub_metadata(hub_class: type[DataHub]) -> dict:
         }
 
     tables: list[dict] = []
-    # Infer input tables from dependencies until explicit input declarations are supported.
-    seen = []
-
     table_order = hub_class.registered_tables_order
+    seen = set(hub_class.input_tables) | set(table_order)
+    for name, metadata in hub_class.input_tables.items():
+        tables.append(
+            {
+                "order": -1,
+                "name": name,
+                "depends": [],
+                "is_optional": None,
+                "metadata_status": "defined" if metadata is not None else "unset",
+                "metadata": metadata.model_dump(mode="json") if metadata is not None else None,
+            }
+        )
     for order, table_name, depends in hub_class.collect_table_and_arguments(table_order):
-        seen.append(table_name)
 
         function = getattr(hub_class, table_name)
         metadata = get_metadata(function, "metadata")
@@ -42,7 +50,6 @@ def get_datahub_metadata(hub_class: type[DataHub]) -> dict:
                 "metadata": metadata.model_dump(mode="json") if metadata is not None else None,
             }
         )
-
         for source in depends:
             if source not in seen:
                 tables.append(
@@ -51,11 +58,11 @@ def get_datahub_metadata(hub_class: type[DataHub]) -> dict:
                         "name": source,
                         "depends": [],
                         "is_optional": None,
-                        "metadata_status": "unsupported",
+                        "metadata_status": "unset",
                         "metadata": None,
                     }
                 )
-                seen.append(source)
+                seen.add(source)
 
     output_metadata = {
         "DataHub": metadata_datahub,

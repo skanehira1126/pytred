@@ -39,7 +39,7 @@ def collect_dataflow_elements(datahub: DataHub) -> list[dict]:
         datahub.collect_table_and_arguments(datahub.table_order, include_input_table=True)
     )
     identifiers = {name: f"table-{index}" for index, (_, name, _) in enumerate(tables)}
-    nodes = []
+    nodes: list[dict] = []
     edges = []
     previous = "root"
     join_index = 0
@@ -48,7 +48,8 @@ def collect_dataflow_elements(datahub: DataHub) -> list[dict]:
         if order == -1:
             table = datahub.tables[name]
             join, keys = table.join, table.keys
-            description = ""
+            metadata = datahub.input_tables.get(name)
+            description = metadata.description or "" if metadata is not None else ""
             optional = False
         else:
             function = getattr(datahub, name)
@@ -76,6 +77,10 @@ def collect_dataflow_elements(datahub: DataHub) -> list[dict]:
                 }
             }
         )
+        if order == -1:
+            nodes[-1]["data"]["metadata"] = (
+                metadata.model_dump(mode="json") if metadata is not None else None
+            )
         if join is not None:
             join_index += 1
             join_id = f"join-{join_index}"

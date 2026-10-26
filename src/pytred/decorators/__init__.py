@@ -4,7 +4,7 @@ from collections.abc import Callable
 from typing import Literal
 from typing import TypeGuard
 
-from pytred._types import POLARS_JOIN_METHOD
+from pytred._types import PolarsJoinMethod
 from pytred.decorators.polars import polars_table
 
 
@@ -43,7 +43,7 @@ def table(
 
 def check_polars_join_keys(
     join: str | None,
-) -> TypeGuard[POLARS_JOIN_METHOD | None]:
+) -> TypeGuard[PolarsJoinMethod | None]:
     """
     Validates whether the specified join method is supported by the Polars engine.
 

@@ -10,9 +10,31 @@ from pytred import DataNode
 from pytred.decorators import polars_table
 from pytred.helpers.visualize import collect_dataflow_elements
 from pytred.helpers.visualize import visualize_datahub
+from pytred.metadata import TableMetadata
 
 from ..fixtures.data_hub import BranchingHub
 from ..fixtures.data_hub import OptionalHub
+
+
+def test_input_declarations_add_metadata_without_changing_graph():
+    declared = TableMetadata(description="Declared source", primary_key=("id",))
+    upstream = TableMetadata(description="Upstream source")
+
+    class Hub(BranchingHub, input_tables={"source": declared, "unused": None}):
+        pass
+
+    node = DataNode(pl.DataFrame(), keys=("id",), join="left", name="source", metadata=upstream)
+    hub = Hub(pl.DataFrame(), node)
+    original = collect_dataflow_elements(BranchingHub(pl.DataFrame(), node))
+    elements = snapshot_data(visualize_datahub(hub))["elements"]
+    source = next(e["data"] for e in elements if e["data"].get("label") == "source")
+    assert source["metadata"] == declared.model_dump(mode="json")
+    assert source["description"] == "Declared source"
+    assert not any(e["data"].get("label") == "unused" for e in elements)
+    source["metadata"] = None
+    source["description"] = ""
+    assert elements == original
+    assert node.metadata is upstream
 
 
 def test_graph_describes_dependencies_and_joins_without_execution():

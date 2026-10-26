@@ -10,7 +10,11 @@ from pytred.decorators import polars_table
 from pytred.metadata import TableMetadata
 
 
-class CliHub(DataHub, metadata=TableMetadata(description="CLI example")):
+class CliHub(
+    DataHub,
+    metadata=TableMetadata(description="CLI example"),
+    input_tables={"source": TableMetadata(description="CLI input")},
+):
     def __init__(self):
         pytest.fail("The CLI must not construct the pipeline")
 
@@ -33,6 +37,7 @@ def test_metadata_command(monkeypatch, capsys):
     source, table = result["tables"]
     assert source["name"] == "source"
     assert source["is_optional"] is None
+    assert source["metadata"]["description"] == "CLI input"
     assert table["name"] == "result"
     assert table["is_optional"] is True
 

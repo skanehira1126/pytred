@@ -51,14 +51,60 @@ metadata = get_datahub_metadata(MyDataHub)
 Inspection does not construct the DataHub or execute its processing methods.
 The CLI imports the target module, so its top-level code runs normally.
 The result contains `DataHub` and `tables`. Each entry has `metadata_status`:
-`defined` for configured metadata, `unset` for missing metadata, or `unsupported`
-for inferred input tables whose metadata cannot yet be declared. The `metadata`
+`defined` for configured metadata or `unset` for missing metadata. The `metadata`
 field is an object when defined and `null` otherwise in JSON.
 
 Each table entry also includes `is_optional`: `true` or `false` for processing
 methods, and `null` for input tables where it does not apply. This describes
 whether a method can be skipped when dependencies are missing, not whether it
 was skipped during an execution.
+
+Declare input metadata independently of runtime data with `input_tables`:
+
+```python
+from pytred import DataHub
+from pytred.metadata import TableMetadata
+
+class MyDataHub(DataHub, input_tables={
+    "source": TableMetadata(description="Source observations", primary_key=("id",)),
+    "lookup": None,
+}):
+    pass
+
+metadata = get_datahub_metadata(MyDataHub)
+```
+
+`MyDataHub.input_tables` contains the declarations, including unused inputs.
+Omitting `input_tables` (or passing `None`) leaves declarations empty, just as
+output `metadata` is not inherited automatically. Each class uses only the
+declarations explicitly passed to it. To reuse a parent's declarations, pass
+`input_tables=ParentHub.input_tables`, or extend them explicitly with
+`{**ParentHub.input_tables, "extra": TableMetadata(...)}`. The mapping is copied.
+Names must be
+non-empty strings and must not collide with decorated processing methods.
+Values must be `TableMetadata` or `None`; `None` declares a name without metadata.
+
+Input declarations describe the pipeline independently of runtime DataNodes.
+The CLI and visualization read input metadata from `input_tables`; they do not
+fall back to metadata on supplied nodes. DataHub retains supplied DataNodes as-is,
+including their metadata and join settings, without copying them or emitting warnings.
+`hub.get(name).metadata` therefore need not match the pipeline declaration.
+Named DataFrame inputs are wrapped in DataNodes without metadata. Undeclared
+inputs remain accepted.
+Declarations do not load data, validate DataFrame schemas, or make inputs required:
+missing dependencies still skip optional steps and fail required steps as before.
+Metadata output includes declared inputs and dependencies without a processing
+method as their producer. Undeclared inputs have `metadata_status: "unset"` and
+`metadata: null`; shared dependencies appear only once. A table produced by a
+later processing method is not treated as an external input.
+Input declarations are optional and do not affect execution.
+
+`visualize_datahub(hub)` displays an existing DataHub instance. Input nodes include
+metadata and descriptions from the hub's input declarations. Declarations do not
+add graph nodes or change dependencies and joins; missing dependencies remain
+missing even when their names are declared.
+
+In 0.5.1, the internal type alias `POLARS_JOIN_METHOD` is renamed to `PolarsJoinMethod`.
 
 In 0.5.0, `DataHub.registerd_tables_order` is renamed to
 `DataHub.registered_tables_order`; update any direct references to the old name.

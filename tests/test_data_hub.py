@@ -29,7 +29,10 @@ def test_register_and_join_inputs():
     hub = DataHub(pl.DataFrame({"id": [1, 2]}), node, source=frame)
 
     assert set(hub.tables) == {"joined", "source"}
-    assert hub.get("joined") is node
+    joined = hub.get("joined")
+    assert joined is node
+    assert joined.table is node.table
+    assert (joined.name, joined.keys, joined.join) == ("joined", ("id",), "left")
     source = hub.get("source")
     assert (source.name, source.keys, source.join) == ("source", None, None)
     assert_frame_equal(source.table, frame)
@@ -152,3 +155,89 @@ def test_get_unknown_table(hub):
     hub()
     with pytest.raises(KeyError, match="missing"):
         hub.get("missing")
+
+
+def test_input_declarations_are_explicit_and_copied():
+    metadata = TableMetadata(description="Source")
+    declarations = {"source": metadata}
+
+    class Parent(DataHub, input_tables=declarations):
+        pass
+
+    class Child(Parent):
+        pass
+
+    class Grandchild(Child):
+        pass
+
+    class Unset(Parent, input_tables=None):
+        pass
+
+    class Reused(Parent, input_tables=Parent.input_tables):
+        pass
+
+    class Replacement(Parent, input_tables={"other": None}):
+        pass
+
+    class Cleared(Parent, input_tables={}):
+        pass
+
+    declarations.clear()
+    Reused.input_tables["extra"] = None
+    assert Parent.input_tables == {"source": metadata}
+    assert Child.input_tables == {}
+    assert Grandchild.input_tables == {}
+    assert Unset.input_tables == {}
+    assert Reused.input_tables == {"source": metadata, "extra": None}
+    assert Replacement.input_tables == {"other": None}
+    assert Cleared.input_tables == {}
+
+
+def test_input_declarations_do_not_modify_runtime_nodes(caplog):
+    declared = TableMetadata(description="Declared")
+    supplied = TableMetadata(description="Supplied")
+
+    class Hub(DataHub, input_tables={"source": declared, "frame": declared}):
+        pass
+
+    node = DataNode(pl.DataFrame(), keys=None, join=None, name="source", metadata=supplied)
+    hub = Hub(pl.DataFrame(), node, frame=pl.DataFrame())
+    assert hub.get("source") is node
+    assert hub.get("source").metadata is supplied
+    assert hub.get("frame").metadata is None
+    assert Hub.input_tables["source"] is declared
+    assert not [record for record in caplog.records if record.name == "pytred.data_hub"]
+
+
+def test_absent_declared_input_keeps_optional_and_required_behavior():
+    class Hub(DataHub, input_tables={"source": TableMetadata()}):
+        @polars_table(0, is_optional=True)
+        def optional(self, source):
+            return source
+
+        @polars_table(1)
+        def required(self, source):
+            return source
+
+    hub = Hub(pl.DataFrame())
+    with pytest.raises(KeyError, match="source"):
+        hub.create_tables()
+    assert isinstance(hub.get("optional"), EmptyDataNode)
+    assert "source" not in hub.tables
+
+
+@pytest.mark.parametrize("declarations", [{"": None}, {1: None}, {"source": {}}])
+def test_invalid_input_declaration(declarations):
+    with pytest.raises(TypeError):
+
+        class Hub(DataHub, input_tables=declarations):
+            pass
+
+
+def test_input_declaration_cannot_shadow_processing_method():
+    with pytest.raises(ValueError, match="source"):
+
+        class Hub(DataHub, input_tables={"source": None}):
+            @polars_table(0)
+            def source(self):
+                return pl.DataFrame()

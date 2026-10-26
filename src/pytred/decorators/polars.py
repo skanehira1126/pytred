@@ -7,7 +7,7 @@ from logging import getLogger
 
 import polars as pl
 
-from pytred._types import POLARS_JOIN_METHOD
+from pytred._types import PolarsJoinMethod
 from pytred.exceptions import DuplicatedError
 from pytred.exceptions import InvalidReturnValueError
 from pytred.metadata import TableMetadata
@@ -16,7 +16,7 @@ from pytred.metadata import TableMetadata
 logger = getLogger(__name__)
 
 
-def _validate_signature(order: int, keys: tuple[str, ...], join: POLARS_JOIN_METHOD | None = None):
+def _validate_signature(order: int, keys: tuple[str, ...], join: PolarsJoinMethod | None = None):
     if not isinstance(order, int):
         raise ValueError("order must be int.")
     if isinstance(order, int) and order < 0:
@@ -32,7 +32,7 @@ def _validate_signature(order: int, keys: tuple[str, ...], join: POLARS_JOIN_MET
 def _set_metadata_to_function(
     wrapper,
     order: int,
-    join: POLARS_JOIN_METHOD | None,
+    join: PolarsJoinMethod | None,
     keys: tuple[str, ...],
     is_optional: bool,
     metadata: TableMetadata | None = None,
@@ -51,7 +51,7 @@ def _set_metadata_to_function(
 def polars_table(
     order: int,
     *keys: str,
-    join: POLARS_JOIN_METHOD | None = None,
+    join: PolarsJoinMethod | None = None,
     is_validate_unique: bool = True,
     is_optional: bool = False,
     metadata: TableMetadata | None = None,
