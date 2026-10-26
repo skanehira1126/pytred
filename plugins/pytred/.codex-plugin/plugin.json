@@ -1,6 +1,6 @@
 {
   "name": "pytred",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Build and explain pytred preprocessing pipelines with DataHub, DataNode, and polars_table.",
   "author": {
     "name": "Shinichi Kanehira"

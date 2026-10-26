@@ -20,10 +20,9 @@ the target module, so module-level code still runs.
 - `metadata_status`: `defined` (metadata object) or `unset` (`metadata: null`).
   Declared metadata is not an inferred DataFrame schema.
 
-In pytred 0.5.1+, declare inputs with
-`class MyHub(DataHub, input_tables={"source": TableMetadata(...)}):`.
-Declarations are optional, are not automatically inherited, and do not change
-runtime DataNodes. Dependencies without a processing method as their producer
+For declaration syntax and its relationship to runtime DataNodes, read
+[Define Table Metadata](usage-guide.md#define-table-metadata).
+In pytred 0.5.1+, dependencies without a processing method as their producer
 appear once as input entries with `unset` metadata when undeclared.
 Pytred 0.5.0 marks inferred input entries `unsupported` instead.
 

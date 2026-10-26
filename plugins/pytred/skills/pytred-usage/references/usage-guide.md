@@ -130,6 +130,52 @@ Guidance:
 - Use keyword `pl.DataFrame` inputs when the table is only a named dependency for decorated methods.
 - Avoid passing a completed joinable table as `some_name=df` unless you intentionally want it registered as a non-joined input table.
 
+## Define Table Metadata
+
+Input declarations require pytred 0.5.1 or later. Define input metadata with the
+DataHub class's `input_tables`, intermediate table metadata with
+`@polars_table(metadata=...)`, and output metadata with the class's `metadata`.
+
+```python
+import polars as pl
+
+from pytred import DataHub
+from pytred.decorators import polars_table
+from pytred.helpers.metadata import get_datahub_metadata
+from pytred.metadata import ColumnMetadata
+from pytred.metadata import TableMetadata
+
+
+class Scores(DataHub, input_tables={
+    "source": TableMetadata(description="Observed scores", primary_key=("id",)),
+}, metadata=TableMetadata(description="Scores joined to the requested IDs")):
+    @polars_table(0, "id", join="left", metadata=TableMetadata(
+        description="Selected scores",
+        columns=(ColumnMetadata(name="score", description="Observed score"),),
+    ))
+    def scores(self, source):
+        return source.select("id", "score")
+
+
+hub = Scores(
+    pl.DataFrame({"id": [1, 2]}),
+    source=pl.DataFrame({"id": [1, 2], "score": [10, 20]}),
+)
+output = hub()  # columns: id, score; rows: (1, 10), (2, 20)
+definitions = get_datahub_metadata(Scores)
+```
+
+Declarations describe the pipeline; they do not load data, enforce required inputs,
+validate DataFrame schemas, or change joins and optional-step behavior. Input and
+output declarations are not inherited automatically. Reuse a parent's inputs
+explicitly with `input_tables=ParentHub.input_tables` when appropriate.
+
+Supplied DataNodes retain their own metadata. Input declarations do not synchronize
+with `hub.get(name).metadata`; metadata inspection and input-node visualization use
+the class declaration, without falling back to the supplied node's metadata.
+Generated nodes receive their decorator's metadata, including skipped optional nodes.
+For CLI usage and the output format, read the [CLI guide](cli-guide.md).
+
 ## Inspect and Debug
 
 - Call `hub.get("table_name")` after execution to access a specific created table as a `DataNode`.
@@ -142,7 +188,8 @@ Guidance:
 
 ## Notebook Visualization
 
-Display a DataHub instance in a notebook with Jupyter Widgets support:
+Display a DataHub instance in a notebook that supports trusted HTML, JavaScript,
+and sandboxed iframes:
 
 ```python
 from IPython.display import display
@@ -155,6 +202,9 @@ The Cytoscape.js graph shows dependencies and joins without executing the pipeli
 Zoom or pan the graph, select a node to inspect its metadata and related steps,
 and switch between vertical and horizontal placement. Missing inputs are explicit;
 optional steps remain part of the displayed definition.
+In pytred 0.5.1+, input nodes include metadata and descriptions from `input_tables`.
+Declarations do not add nodes or change dependencies and joins. Pass an instance,
+not the DataHub class, to visualization.
 
 For a displayable HTML snapshot, use `visualize_datahub(hub, direction="LR")` from
 `pytred.helpers.visualize`. Each display captures the current definition; display
