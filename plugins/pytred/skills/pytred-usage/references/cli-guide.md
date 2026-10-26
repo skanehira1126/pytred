@@ -13,12 +13,19 @@ The command prints JSON without constructing or executing the DataHub. It import
 the target module, so module-level code still runs.
 
 - `DataHub`: class name and output metadata.
-- `tables`: generated tables and inferred inputs, with `order`, `name`, `depends`,
+- `tables`: generated tables, declared inputs (pytred 0.5.1+), and inferred inputs,
+  with `order`, `name`, `depends`,
   and `is_optional`. Input tables use order `-1` and `is_optional: null`.
 - `is_optional` is a definition flag, not an execution or skip result.
-- `metadata_status`: `defined` (metadata object), `unset` (not configured), or
-  `unsupported` (input metadata inspection is not yet supported). The latter two
-  have `metadata: null`. Declared metadata is not an inferred DataFrame schema.
+- `metadata_status`: `defined` (metadata object) or `unset` (`metadata: null`).
+  Declared metadata is not an inferred DataFrame schema.
+
+In pytred 0.5.1+, declare inputs with
+`class MyHub(DataHub, input_tables={"source": TableMetadata(...)}):`.
+Declarations are optional, are not automatically inherited, and do not change
+runtime DataNodes. Dependencies without a processing method as their producer
+appear once as input entries with `unset` metadata when undeclared.
+Pytred 0.5.0 marks inferred input entries `unsupported` instead.
 
 For a dictionary in Python, pass the class directly:
 
