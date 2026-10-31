@@ -27,7 +27,7 @@ See the [visualization guide](docs/tutorials/visualization.md).
 
 ## Metadata inspection
 
-Python 3.11 or later is required. Define table and column metadata with
+Python 3.11 through 3.14 is supported. Define table and column metadata with
 `pytred.metadata.TableMetadata` and `ColumnMetadata`. Pass table metadata to
 `@polars_table(..., metadata=...)` or declare output metadata on a DataHub subclass
 with `class MyDataHub(DataHub, metadata=...):`.
