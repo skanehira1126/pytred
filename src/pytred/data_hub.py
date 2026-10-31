@@ -32,6 +32,36 @@ TableExecutionOrders = dict[str, int]
 
 
 class DataHub:
+    """Run an ordered pipeline of Polars tables and join its results to a root DataFrame.
+
+    Define a pipeline as a direct subclass of DataHub. Mark one required input
+    with ``Annotated[pl.DataFrame, Root(...)]`` to select the base for joins.
+    Mark other required inputs with ``Input(...)``. Each decorated method receives
+    tables by parameter name and runs in the order set by its ``@polars_table``
+    decorator. The class keyword ``metadata`` describes the final output.
+
+    Create the hub without data, then pass the inputs for each run to
+    ``execute()``. A parent pipeline can pass an intermediate DataFrame as
+    the named root of a child hub.
+
+    Examples
+    --------
+    >>> from typing import Annotated
+    >>> import polars as pl
+    >>> from pytred import DataHub
+    >>> from pytred._types import Root
+    >>> from pytred.decorators import polars_table
+    >>> class Scores(DataHub):
+    ...     rows: Annotated[pl.DataFrame, Root(metadata=None)]
+    ...
+    ...     @polars_table(0, "id", join="left")
+    ...     def scores(self, rows):
+    ...         return rows.select("id", score=pl.col("id") * 10)
+    >>> hub = Scores()
+    >>> hub.execute(rows=pl.DataFrame({"id": [1, 2]})).rows()
+    [(1, 10), (2, 20)]
+    """
+
     table_join_info: TableJoinMethod | None = None
     table_join_keys: TableJoinKeys | None = None
     registered_tables_order: ClassVar[TableExecutionOrders] = {}
@@ -49,12 +79,10 @@ class DataHub:
         metadata: TableMetadata | None = None,
         **kwargs,
     ):
-        """
-        Collects annotated functions and their execution order when initializing a subclass.
+        """Collect this pipeline's input declarations and decorated table methods.
 
-        Declare required inputs with Annotated and an Input or Root marker.
-        Each concrete pipeline inherits directly from DataHub. The metadata
-        class argument describes the final output.
+        Raises TypeError for a subclass of a user-defined hub and ValueError
+        for multiple input markers on one field or multiple root fields.
         """
         super().__init_subclass__(**kwargs)
         for base in cls.__bases__:
@@ -108,6 +136,11 @@ class DataHub:
 
     @property
     def root_df(self):
+        """Return the root DataFrame registered in the current run.
+
+        Raises KeyError if the declared root has not yet been supplied, or
+        RuntimeError if the hub has no root declaration or the root was skipped.
+        """
         name = self.get_root_table_name()
         node = self.get(name)
         if isinstance(node, DataNode):
@@ -115,7 +148,11 @@ class DataHub:
         raise RuntimeError(f"Root table {name!r} was skipped.")
 
     def validate_tables_is_node(self, *tables) -> list[DataNode]:
-        """Validate that inputs are DataNode instances."""
+        """Return positional DataNodes in order, preserving their join settings.
+
+        Raises TypeError for a non-node argument or ValueError for a node
+        named after the root, which must be supplied as a keyword DataFrame.
+        """
         input_data_node = []
         for data_node in tables:
             if isinstance(data_node, DataNode):
@@ -193,6 +230,7 @@ class DataHub:
         return table_join_info, table_join_keys, table_order
 
     def get_root_table_name(self) -> str:
+        """Return the declared root field name, raising RuntimeError if none is declared."""
         root_name = None
         for name, defs in self.input_tables.items():
             if isinstance(defs["marker"], Root):
@@ -204,6 +242,11 @@ class DataHub:
             return root_name
 
     def get_input_table_names(self) -> list[str]:
+        """Return all declared input names, including the root.
+
+        These names are available before execution. Raises RuntimeError when
+        the pipeline declares no inputs.
+        """
         inputs = []
         for name, defs in self.input_tables.items():
             if isinstance(defs["marker"], Input):
@@ -247,7 +290,22 @@ class DataHub:
         Returns
         -------
         pl.DataFrame
-            The resulting DataFrame after applying the data processing pipeline and filters.
+            The root joined with the selected tables, after post_step() and
+            the optional filter.
+
+        Raises
+        ------
+        TypeError
+            A positional input is not a DataNode or a named input is not a DataFrame.
+        ValueError
+            A declared input is missing, an input name is supplied more than
+            once, or a positional DataNode has the root's name.
+
+        Notes
+        -----
+        Each call clears the previous run before validating inputs. If a
+        processing method fails, get() can inspect the inputs and intermediate
+        tables already registered during this call.
         """
         # initialize
         self.tables = {}
@@ -411,25 +469,11 @@ class DataHub:
         return df
 
     def get(self, table_name: str) -> DataNode | EmptyDataNode:
-        """
-        Retrieves a DataNode by its name.
+        """Look up an input or intermediate table from the current run by name.
 
-        Parameters
-        ----------
-        table_name: str
-            The name of DataNode to retrieve
-
-        Returns
-        -------
-        DataNode | EmptyDataNode
-            The requested DataNode or EmptyDataNode object.
-
-        Raises
-        ------
-        RuntimeError
-            If the tables dictionary is empty or not found.
-        KeyError
-            If the specified table name is not found in the tables dictionary.
+        Returns a DataNode for a registered DataFrame or an EmptyDataNode for
+        a skipped optional step. Raises KeyError if the name has not been
+        registered in this run, including before the first execution.
         """
         try:
             return self.tables[table_name]
