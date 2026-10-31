@@ -9,7 +9,9 @@ from IPython.display import display
 display(hub)
 ```
 
-Each display is an independent snapshot of the current DataHub definition.
+Each display is an independent snapshot. Before execution it shows the processing
+methods and their dependencies. Display the hub after `execute(...)` to see
+registered inputs, their declared metadata and any joins from supplied DataNodes.
 Changing or replacing the hub does not modify previous outputs. Display it again
 to inspect its new state. No widget model, comm, or explicit close is needed.
 
@@ -74,8 +76,7 @@ have been removed. Report and image export are not provided by this version.
 This sample uses the same HTML snapshot as the notebook viewer and works on
 GitHub Pages without a Python server. Hover over `combined`, click a join to
 inspect its keys, or change direction. The sample is generated from
-`docs/demos/viewer_sample.py` when the documentation is built. It displays the
-declared pipeline, including optional joins even when they could be skipped;
-it does not execute transformations or show runtime results.
+`docs/demos/viewer_sample.py` when the documentation is built. The demo executes a small pipeline during the build to register its sample
+inputs. The viewer displays its structure and join settings.
 
 <!-- pytred-interactive-demo -->

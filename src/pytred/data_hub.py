@@ -1,17 +1,21 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from collections.abc import Mapping
 from collections.abc import Sequence
-from functools import reduce
 import inspect
 from logging import getLogger
-from operator import and_
+from typing import Annotated
 from typing import ClassVar
+from typing import get_args
+from typing import get_origin
+from typing import get_type_hints
 
 import polars as pl
 
+from pytred._types import Input
+from pytred._types import InputDefinition
 from pytred._types import PolarsJoinMethod
+from pytred._types import Root
 from pytred.data_node import DataNode
 from pytred.data_node import EmptyDataNode
 from pytred.exceptions import TableNotFoundError
@@ -33,82 +37,62 @@ class DataHub:
     registered_tables_order: ClassVar[TableExecutionOrders] = {}
 
     metadata: ClassVar[TableMetadata | None] = None
-    input_tables: ClassVar[dict[str, TableMetadata | None]] = {}
+    input_tables: ClassVar[dict[str, InputDefinition]] = {}
 
-    def __init__(
-        self,
-        root_df: pl.DataFrame,
-        *tables: DataNode,
-        **named_tables: pl.DataFrame,
-    ):
-        """
-        Initializes the DataHub with a base DataFrame and optionally additional DataNodes or
-        named DataFrames.
-
-        Parameters
-        ----------
-        root_df: pl.DataFrame
-            The base DataFrame to be used as the primary table.
-        tables: DataNode
-            Positional arguments for DataNode objects to be registered.
-        **named_tables: pl.DataFrame
-            Keyword arguments for named DataFrames or DataNodes to be registered.
-        """
-
-        self.root_df = root_df
-
-        # parse additional tables
-        input_tables: list[DataNode] = []
-        # tables of positional arguments
-        if len(tables) >= 1:
-            data_nodes = self.validate_tables_is_node(*tables)
-            input_tables += data_nodes
-        # tables of keyword arguments
-        if len(named_tables) >= 1:
-            input_tables += self.parse_tables_to_node(**named_tables)
-
+    def __init__(self):
         self.tables: dict[str, DataNode | EmptyDataNode] = {}
-        self.table_order = {}
-
-        # User defined tables
-        self.table_order.update(self.registered_tables_order)
-
-        # input tables
-        for data_node in input_tables:
-            if data_node.name in self.tables.keys():
-                raise ValueError(f"{data_node.name} is duplicated.")
-
-            self.tables[data_node.name] = data_node
-
-            self.table_order[data_node.name] = -1
-
-        # Check table
-        if len(self.table_order) == 0:
-            raise TableNotFoundError(f"There are no table in {self.__class__.__name__}.")
+        self.table_order = self.registered_tables_order.copy()
 
     def __init_subclass__(
         cls,
         *,
         metadata: TableMetadata | None = None,
-        input_tables: Mapping[str, TableMetadata | None] | None = None,
         **kwargs,
     ):
         """
         Collects annotated functions and their execution order when initializing a subclass.
 
-        input_tables maps input names to optional metadata, independently of runtime data.
-        Omission or None leaves declarations empty; parent declarations are not inherited.
-        Declarations describe the pipeline;
-        they do not modify runtime input nodes.
+        Declare required inputs with Annotated and an Input or Root marker.
+        Each concrete pipeline inherits directly from DataHub. The metadata
+        class argument describes the final output.
         """
         super().__init_subclass__(**kwargs)
+        for base in cls.__bases__:
+            if base is not DataHub and issubclass(base, DataHub):
+                raise TypeError(
+                    f"{cls.__name__} cannot inherit from {base.__name__}. "
+                    "Inherit directly from DataHub."
+                )
+
         cls.metadata = metadata
-        cls.input_tables = dict(input_tables) if input_tables is not None else {}
-        for name, table_metadata in cls.input_tables.items():
-            if not isinstance(name, str) or not name:
-                raise TypeError("Input table names must be non-empty strings")
-            if table_metadata is not None and not isinstance(table_metadata, TableMetadata):
-                raise TypeError(f"Input table {name!r} metadata must be TableMetadata or None")
+
+        hints = get_type_hints(cls, include_extras=True)
+
+        definitions: dict[str, InputDefinition] = {}
+        root_name: str | None = None
+        for name, annotation in hints.items():
+            if get_origin(annotation) is not Annotated:
+                continue
+
+            dtype, *extras = get_args(annotation)
+            if sum(isinstance(marker, Input) for marker in extras) >= 2:
+                raise ValueError(
+                    f"{cls.__name__}.{name} has multiple input markers. "
+                    "Use a single Input or Root marker."
+                )
+            for extra in extras:
+                if not isinstance(extra, Input):
+                    continue
+                if isinstance(extra, Root):
+                    if root_name is not None:
+                        raise ValueError(
+                            f"{cls.__name__} has two Root fields ('{root_name}' and '{name}'). "
+                            "Only one field can be marked as Root."
+                        )
+                    root_name = name
+                definitions[name] = {"dtype": dtype, "marker": extra}
+
+        cls.input_tables = definitions
 
         cls.table_join_info = {}
         cls.table_join_keys = {}
@@ -121,11 +105,16 @@ class DataHub:
         cls.table_join_info.update(table_join_info)
         cls.table_join_keys.update(table_join_keys)
         cls.registered_tables_order.update(table_order)
-        if conflicts := cls.input_tables.keys() & table_order.keys():
-            raise ValueError(f"Input tables conflict with processing methods: {sorted(conflicts)}")
 
-    @staticmethod
-    def validate_tables_is_node(*tables) -> list[DataNode]:
+    @property
+    def root_df(self):
+        name = self.get_root_table_name()
+        node = self.get(name)
+        if isinstance(node, DataNode):
+            return node.table
+        raise RuntimeError(f"Root table {name!r} was skipped.")
+
+    def validate_tables_is_node(self, *tables) -> list[DataNode]:
         """Validate that inputs are DataNode instances."""
         input_data_node = []
         for data_node in tables:
@@ -133,6 +122,12 @@ class DataHub:
                 input_data_node.append(data_node)
             else:
                 raise TypeError(f"tables must be DataNode, not {type(data_node)}.")
+
+        for node in input_data_node:
+            if node.name == self.get_root_table_name():
+                raise ValueError(
+                    f"Pass the root table '{node.name}' as a named DataFrame argument."
+                )
         return input_data_node
 
     @staticmethod
@@ -197,46 +192,103 @@ class DataHub:
 
         return table_join_info, table_join_keys, table_order
 
-    def __call__(self, *filters: pl.Expr) -> pl.DataFrame:
+    def get_root_table_name(self) -> str:
+        root_name = None
+        for name, defs in self.input_tables.items():
+            if isinstance(defs["marker"], Root):
+                root_name = name
+
+        if root_name is None:
+            raise RuntimeError("Root table is not found.")
+        else:
+            return root_name
+
+    def get_input_table_names(self) -> list[str]:
+        inputs = []
+        for name, defs in self.input_tables.items():
+            if isinstance(defs["marker"], Input):
+                inputs.append(name)
+
+        if inputs:
+            return inputs
+        else:
+            raise RuntimeError("Input table is not found.")
+
+    def __call__(
+        self,
+        *tables: DataNode,
+        filter: pl.Expr | None = None,
+        **named_tables: pl.DataFrame,
+    ) -> pl.DataFrame:
         """
-        Executes the data processing pipeline using the provided filter expressions as an alias
-        to execute.
+        Execute the pipeline with the same inputs and filter as execute().
+        """
+        return self.execute(*tables, filter=filter, **named_tables)
+
+    def execute(
+        self,
+        *tables: DataNode,
+        filter: pl.Expr | None = None,
+        **named_tables: pl.DataFrame,
+    ) -> pl.DataFrame:
+        """
+        Clear previous results, register inputs, execute methods and join their outputs.
 
         Parameters
         ----------
-        filters : pl.Expr
-            Filter expressions to apply to the output DataFrame.
+        *tables : DataNode
+            Computed non-root tables, each with its own name and join settings.
+        filter : pl.Expr, optional
+            Filter applied after all joins and post_step().
+        **named_tables : pl.DataFrame
+            Supply the root by its declared name. All declared inputs are required
+            on every run. Additional named DataFrames can supply dependencies.
 
         Returns
         -------
         pl.DataFrame
             The resulting DataFrame after applying the data processing pipeline and filters.
         """
-        return self.execute(*filters)
+        # initialize
+        self.tables = {}
+        self.table_order = {}
 
-    def execute(self, *filters: pl.Expr) -> pl.DataFrame:
-        """
-        Executes the data processing pipeline, including table creation, joins, and applying
-        filter expressions.
+        # parse additional tables
+        input_tables: list[DataNode] = []
+        # tables of positional arguments
+        if len(tables) >= 1:
+            data_nodes = self.validate_tables_is_node(*tables)
+            input_tables += data_nodes
 
-        Parameters
-        ----------
-        filters : pl.Expr
-            Filter expressions to apply to the output DataFrame.
+        # tables of keyword arguments
+        if len(named_tables) >= 1:
+            input_tables += self.parse_tables_to_node(**named_tables)
 
-        Returns
-        -------
-        pl.DataFrame
-            The resulting DataFrame after applying the data processing pipeline and filters.
-        """
+        provided_names = {node.name for node in input_tables}
+        missing_names = set(self.input_tables) - provided_names
+        if missing_names:
+            names = ", ".join(sorted(missing_names))
+            raise ValueError(f"Missing required input tables: {names}")
+
+        # User defined tables
+        self.table_order.update(self.registered_tables_order)
+
+        # input tables
+        for data_node in input_tables:
+            if data_node.name in self.tables.keys():
+                raise ValueError(f"{data_node.name} is duplicated.")
+
+            self.tables[data_node.name] = data_node
+            self.table_order[data_node.name] = -1
+
+        # Check table
+        if len(self.table_order) == 0:
+            raise TableNotFoundError(f"There are no table in {self.__class__.__name__}.")
+
         # On calling execute, annotated functions are executed to create each DataFrame as needed.
         # if self.table_functions is not None:
         if self.table_order is not None and max(v for v in self.table_order.values()) >= 0:
             self.create_tables()
-
-        # Validate to self.tables is not empty.
-        if self.tables is None or len(self.tables) == 0:
-            raise RuntimeError("There are not tables.")
 
         # join table
         df = self.steps()
@@ -244,9 +296,9 @@ class DataHub:
         # processing of joined dataframe
         df = self.post_step(df)
 
-        # filterling
-        if filters:
-            df = df.filter(reduce(and_, filters))
+        # filter
+        if filter is not None:
+            df = df.filter(filter)
 
         return df
 
@@ -337,6 +389,10 @@ class DataHub:
                     name=name,
                     metadata=get_metadata(process_fn, "metadata"),
                 )
+
+        # Validate to self.tables is not empty.
+        if self.tables is None or len(self.tables) == 0:
+            raise RuntimeError("There are not tables.")
 
     def post_step(self, df: pl.DataFrame) -> pl.DataFrame:
         """

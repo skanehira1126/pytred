@@ -13,7 +13,7 @@ The command prints JSON without constructing or executing the DataHub. It import
 the target module, so module-level code still runs.
 
 - `DataHub`: class name and output metadata.
-- `tables`: generated tables, declared inputs (pytred 0.5.1+), and inferred inputs,
+- `tables`: generated tables, inputs declared with Root/Input, and inferred inputs,
   with `order`, `name`, `depends`,
   and `is_optional`. Input tables use order `-1` and `is_optional: null`.
 - `is_optional` is a definition flag, not an execution or skip result.

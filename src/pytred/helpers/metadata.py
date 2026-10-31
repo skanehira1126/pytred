@@ -8,6 +8,8 @@ def get_datahub_metadata(hub_class: type[DataHub]) -> dict:
         raise TypeError("The target must be a DataHub subclass")
 
     datahub_name = f"{hub_class.__module__}:{hub_class.__qualname__}"
+
+    # Of output table from DataHub
     metadata_datahub: dict[str, object]
     if hub_class.metadata is None:
         metadata_datahub = {
@@ -25,7 +27,8 @@ def get_datahub_metadata(hub_class: type[DataHub]) -> dict:
     tables: list[dict] = []
     table_order = hub_class.registered_tables_order
     seen = set(hub_class.input_tables) | set(table_order)
-    for name, metadata in hub_class.input_tables.items():
+    for name, input_defs in hub_class.input_tables.items():
+        metadata = input_defs["marker"].metadata
         tables.append(
             {
                 "order": -1,
@@ -37,7 +40,6 @@ def get_datahub_metadata(hub_class: type[DataHub]) -> dict:
             }
         )
     for order, table_name, depends in hub_class.collect_table_and_arguments(table_order):
-
         function = getattr(hub_class, table_name)
         metadata = get_metadata(function, "metadata")
         tables.append(

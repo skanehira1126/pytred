@@ -29,6 +29,104 @@ class DataflowView:
         return self.html
 
 
+def _table_node_data(datahub: DataHub, name: str, order: int, node_id: str) -> dict:
+    if order == -1:
+        table = datahub.tables[name]
+        definition = datahub.input_tables.get(name)
+        description = ""
+        metadata = None
+        if definition is not None and definition["marker"].metadata is not None:
+            declared = definition["marker"].metadata
+            description = declared.description or ""
+            metadata = declared.model_dump(mode="json")
+
+        return {
+            "id": node_id,
+            "label": name,
+            "kind": "input",
+            "order": order,
+            "join": table.join or "",
+            "keys": list(table.keys or ()),
+            "description": description,
+            "optional": False,
+            "implementation": "",
+            "metadata": metadata,
+        }
+
+    function = getattr(datahub, name)
+    try:
+        implementation = dedent(inspect.getsource(inspect.unwrap(function))).strip()
+    except (OSError, TypeError, ValueError):
+        # Dynamic functions and some notebook cells have no retrievable source.
+        implementation = ""
+    return {
+        "id": node_id,
+        "label": name,
+        "kind": "process",
+        "order": order,
+        "join": get_metadata(function, "join") or "",
+        "keys": list(get_metadata(function, "keys") or ()),
+        "description": inspect.getdoc(function) or "",
+        "optional": bool(get_metadata(function, "is_optional")),
+        "implementation": implementation,
+    }
+
+
+def _build_join_path(table_nodes: list[dict]) -> tuple[list[dict], list[dict], str]:
+    """Interleave tables with their join steps and return the last base node's ID."""
+    nodes = []
+    edges = []
+    previous = "root"
+    sequence = 0
+    for table in table_nodes:
+        nodes.append(table)
+        join = table["join"]
+        if not join:
+            continue
+        sequence += 1
+        join_id = f"join-{sequence}"
+        name = table["label"]
+        nodes.append(
+            {
+                "id": join_id,
+                "label": f"{sequence:02d}  {join.upper()} JOIN",
+                "kind": "join-step",
+                "join": join,
+                "keys": table["keys"].copy(),
+                "table": name,
+                "optional": table["optional"],
+                "sequence": sequence,
+                "description": "Join the accumulated base table with this table.",
+            }
+        )
+        edges.append({"source": previous, "target": join_id, "kind": "base", "label": ""})
+        edges.append({"source": table["id"], "target": join_id, "kind": "join", "label": ""})
+        previous = join_id
+    return nodes, edges, previous
+
+
+def _build_dependencies(
+    tables: list[tuple[int, str, list[str]]], identifiers: dict[str, str]
+) -> tuple[list[dict], list[dict]]:
+    missing_nodes = []
+    edges = []
+    for _, name, arguments in tables:
+        for argument in arguments:
+            if argument not in identifiers:
+                node_id = f"table-{len(identifiers)}"
+                identifiers[argument] = node_id
+                missing_nodes.append({"id": node_id, "label": argument, "kind": "missing"})
+            edges.append(
+                {
+                    "source": identifiers[argument],
+                    "target": identifiers[name],
+                    "kind": "dependency",
+                    "label": "",
+                }
+            )
+    return missing_nodes, edges
+
+
 def collect_dataflow_elements(datahub: DataHub) -> list[dict]:
     """Describe declared dependencies and joins as JSON-compatible graph elements.
 
@@ -39,115 +137,19 @@ def collect_dataflow_elements(datahub: DataHub) -> list[dict]:
         datahub.collect_table_and_arguments(datahub.table_order, include_input_table=True)
     )
     identifiers = {name: f"table-{index}" for index, (_, name, _) in enumerate(tables)}
-    nodes: list[dict] = []
-    edges = []
-    previous = "root"
-    join_index = 0
-    for order, name, _ in tables:
-        implementation = ""
-        if order == -1:
-            table = datahub.tables[name]
-            join, keys = table.join, table.keys
-            metadata = datahub.input_tables.get(name)
-            description = metadata.description or "" if metadata is not None else ""
-            optional = False
-        else:
-            function = getattr(datahub, name)
-            join = get_metadata(function, "join")
-            keys = get_metadata(function, "keys")
-            description = inspect.getdoc(function) or ""
-            optional = bool(get_metadata(function, "is_optional"))
-            try:
-                implementation = dedent(inspect.getsource(inspect.unwrap(function))).strip()
-            except (OSError, TypeError, ValueError):
-                # Dynamic functions and some notebook cells have no retrievable source.
-                pass
-        nodes.append(
-            {
-                "data": {
-                    "id": identifiers[name],
-                    "label": name,
-                    "kind": "input" if order == -1 else "process",
-                    "order": order,
-                    "join": join or "",
-                    "keys": list(keys) if keys is not None else [],
-                    "description": description,
-                    "optional": optional,
-                    "implementation": implementation,
-                }
-            }
-        )
-        if order == -1:
-            nodes[-1]["data"]["metadata"] = (
-                metadata.model_dump(mode="json") if metadata is not None else None
-            )
-        if join is not None:
-            join_index += 1
-            join_id = f"join-{join_index}"
-            nodes.append(
-                {
-                    "data": {
-                        "id": join_id,
-                        "label": f"{join_index:02d}  {join.upper()} JOIN",
-                        "kind": "join-step",
-                        "join": join,
-                        "keys": list(keys) if keys is not None else [],
-                        "table": name,
-                        "optional": optional,
-                        "sequence": join_index,
-                        "description": "Join the accumulated base table with this table.",
-                    }
-                }
-            )
-            edges.append(
-                {"data": {"source": previous, "target": join_id, "kind": "base", "label": ""}}
-            )
-            edges.append(
-                {
-                    "data": {
-                        "source": identifiers[name],
-                        "target": join_id,
-                        "kind": "join",
-                        "label": "",
-                    }
-                }
-            )
-            previous = join_id
-
-    for _, name, arguments in tables:
-        for argument in arguments:
-            if argument not in identifiers:
-                identifiers[argument] = f"table-{len(identifiers)}"
-                nodes.append(
-                    {
-                        "data": {
-                            "id": identifiers[argument],
-                            "label": argument,
-                            "kind": "missing",
-                        }
-                    }
-                )
-            edges.append(
-                {
-                    "data": {
-                        "source": identifiers[argument],
-                        "target": identifiers[name],
-                        "kind": "dependency",
-                        "label": "",
-                    }
-                }
-            )
-
-    nodes.extend(
-        [
-            {"data": {"id": "root", "label": "root_df", "kind": "root"}},
-            {"data": {"id": "output", "label": "Output", "kind": "output"}},
-        ]
-    )
-    edges.append({"data": {"source": previous, "target": "output", "kind": "base", "label": ""}})
+    table_nodes = [
+        _table_node_data(datahub, name, order, identifiers[name]) for order, name, _ in tables
+    ]
+    nodes, edges, last_base = _build_join_path(table_nodes)
+    missing_nodes, dependencies = _build_dependencies(tables, identifiers)
+    nodes.extend(missing_nodes)
+    nodes.append({"id": "root", "label": "root_df", "kind": "root"})
+    nodes.append({"id": "output", "label": "Output", "kind": "output"})
+    edges.extend(dependencies)
+    edges.append({"source": last_base, "target": "output", "kind": "base", "label": ""})
     for index, edge in enumerate(edges):
-        edge["data"]["id"] = f"edge-{index}"
-    return nodes + edges
+        edge["id"] = f"edge-{index}"
+    return [{"data": item} for item in nodes + edges]
 
 
 def visualize_datahub(datahub: DataHub, *, direction: Literal["TB", "LR"] = "LR") -> DataflowView:

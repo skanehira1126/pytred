@@ -1,8 +1,12 @@
 from datetime import date
 import json
+from typing import Annotated
 
+import polars as pl
 import pytest
 
+from pytred._types import Input
+from pytred._types import Root
 from pytred.data_hub import DataHub
 from pytred.decorators import polars_table
 from pytred.helpers.metadata import get_datahub_metadata
@@ -23,9 +27,10 @@ class MetadataHub(DataHub):
 
 
 def test_declared_inputs_and_later_producers_are_distinct():
-    class Hub(
-        MetadataHub, input_tables={"source": TableMetadata(description="Source"), "unused": None}
-    ):
+    class Hub(DataHub):
+        source: Annotated[pl.DataFrame, Root(metadata=TableMetadata(description="Source"))]
+        unused: Annotated[pl.DataFrame, Input(metadata=None)]
+
         @polars_table(2)
         def before(self, later, undeclared):
             pytest.fail("Inspection must not execute methods")
@@ -40,6 +45,7 @@ def test_declared_inputs_and_later_producers_are_distinct():
     assert by_name["source"]["metadata"]["description"] == "Source"
     assert by_name["source"]["metadata_status"] == "defined"
     assert by_name["unused"]["metadata_status"] == "unset"
+    assert by_name["unused"]["metadata"] is None
     assert len(tables) == len(by_name)
     assert by_name["undeclared"]["metadata_status"] == "unset"
     assert by_name["undeclared"]["metadata"] is None

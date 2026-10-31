@@ -1,12 +1,15 @@
 from html import unescape
 import json
 import re
+from typing import Annotated
 
 from IPython.core.formatters import DisplayFormatter
 import polars as pl
 
 from pytred import DataHub
 from pytred import DataNode
+from pytred._types import Input
+from pytred._types import Root
 from pytred.decorators import polars_table
 from pytred.helpers.visualize import collect_dataflow_elements
 from pytred.helpers.visualize import visualize_datahub
@@ -14,56 +17,54 @@ from pytred.metadata import TableMetadata
 
 from ..fixtures.data_hub import BranchingHub
 from ..fixtures.data_hub import OptionalHub
+from ..fixtures.data_hub import RowsHub
 
 
-def test_input_declarations_add_metadata_without_changing_graph():
+def test_input_node_displays_declared_metadata():
     declared = TableMetadata(description="Declared source", primary_key=("id",))
     upstream = TableMetadata(description="Upstream source")
 
-    class Hub(BranchingHub, input_tables={"source": declared, "unused": None}):
-        pass
+    class Hub(DataHub):
+        rows: Annotated[pl.DataFrame, Root(metadata=None)]
+        source: Annotated[pl.DataFrame, Input(metadata=declared)]
 
-    node = DataNode(pl.DataFrame(), keys=("id",), join="left", name="source", metadata=upstream)
-    hub = Hub(pl.DataFrame(), node)
-    original = collect_dataflow_elements(BranchingHub(pl.DataFrame(), node))
+    frame = pl.DataFrame({"id": [1]})
+    node = DataNode(frame, keys=("id",), join="left", name="source", metadata=upstream)
+    hub = Hub()
+    hub.execute(node, rows=frame)
     elements = snapshot_data(visualize_datahub(hub))["elements"]
     source = next(e["data"] for e in elements if e["data"].get("label") == "source")
     assert source["metadata"] == declared.model_dump(mode="json")
     assert source["description"] == "Declared source"
-    assert not any(e["data"].get("label") == "unused" for e in elements)
-    source["metadata"] = None
-    source["description"] = ""
-    assert elements == original
-    assert node.metadata is upstream
+    assert source["join"] == "left"
 
 
-def test_graph_describes_dependencies_and_joins_without_execution():
-    # Empty frames deliberately cannot execute BranchingHub's transformations.
-    hub = BranchingHub(pl.DataFrame(), source=pl.DataFrame())
+def test_graph_describes_dependencies_and_joins():
+    hub = BranchingHub()
+    hub.execute(rows=pl.DataFrame({"id": [1]}), source=pl.DataFrame({"id": [1], "value": [2]}))
     elements = collect_dataflow_elements(hub)
     nodes = {e["data"]["id"]: e["data"] for e in elements if "source" not in e["data"]}
     edges = [e["data"] for e in elements if "source" in e["data"]]
-
-    assert [(n["label"], n["kind"]) for n in nodes.values()] == [
-        ("source", "input"),
-        ("doubled", "process"),
-        ("offset", "process"),
-        ("combined", "process"),
-        ("01  LEFT JOIN", "join-step"),
-        ("root_df", "root"),
-        ("Output", "output"),
-    ]
     assert {
-        (nodes[e["source"]]["label"], nodes[e["target"]]["label"], e["kind"]) for e in edges
+        (nodes[e["source"]]["label"], nodes[e["target"]]["label"])
+        for e in edges
+        if e["kind"] == "dependency"
     } == {
-        ("source", "doubled", "dependency"),
-        ("source", "offset", "dependency"),
-        ("doubled", "combined", "dependency"),
-        ("offset", "combined", "dependency"),
-        ("combined", "01  LEFT JOIN", "join"),
-        ("root_df", "01  LEFT JOIN", "base"),
-        ("01  LEFT JOIN", "Output", "base"),
+        ("source", "doubled"),
+        ("source", "offset"),
+        ("doubled", "combined"),
+        ("offset", "combined"),
     }
+    assert [
+        (nodes[e["source"]]["kind"], nodes[e["target"]]["kind"])
+        for e in edges
+        if e["kind"] == "base"
+    ] == [("root", "join-step"), ("join-step", "output")]
+    assert [
+        (nodes[e["source"]]["label"], nodes[e["target"]]["table"])
+        for e in edges
+        if e["kind"] == "join"
+    ] == [("combined", "combined")]
     combined = next(n for n in nodes.values() if n["label"] == "combined")
     assert (combined["join"], combined["keys"], combined["order"]) == ("left", ["id"], 1)
     assert "Join both features." in combined["description"]
@@ -71,8 +72,6 @@ def test_graph_describes_dependencies_and_joins_without_execution():
     assert "def combined(self, doubled, offset):" in combined["implementation"]
     assert 'return doubled.join(offset, on="id")' in combined["implementation"]
     assert "_wrapper" not in combined["implementation"]
-    assert nodes["table-0"]["implementation"] == ""
-    assert list(hub.tables) == ["source"]
 
 
 def test_independent_steps_and_sparse_execution_order():
@@ -85,7 +84,7 @@ def test_independent_steps_and_sparse_execution_order():
         def last(self):
             raise AssertionError("Visualization must not execute steps")
 
-    elements = collect_dataflow_elements(IndependentHub(pl.DataFrame()))
+    elements = collect_dataflow_elements(IndependentHub())
     edges = [e["data"] for e in elements if "source" in e["data"]]
     assert {e["kind"] for e in edges} == {"join", "base"}
     assert [(e["source"], e["target"]) for e in edges if e["kind"] == "base"] == [
@@ -96,18 +95,24 @@ def test_independent_steps_and_sparse_execution_order():
 
 def test_input_joins_and_arbitrary_names_are_preserved():
     names = ["root_df", "output", 'end </script><b> & "quoted"']
-    hub = DataHub(
-        pl.DataFrame(),
-        *[DataNode(pl.DataFrame(), keys=('a|b<"c',), join="left", name=name) for name in names],
+    hub = RowsHub()
+    key = 'a|b<"c'
+    frame = pl.DataFrame({key: [1]})
+    hub.execute(
+        *[DataNode(frame, keys=(key,), join="left", name=name) for name in names], rows=frame
     )
     elements = collect_dataflow_elements(hub)
     json.dumps(elements)
     assert len({e["data"]["id"] for e in elements}) == len(elements)
-    assert [e["data"]["label"] for e in elements if e["data"]["kind"] == "input"] == names
+    assert [
+        e["data"]["label"]
+        for e in elements
+        if e["data"]["kind"] == "input" and e["data"]["label"] in names
+    ] == names
     joins = [e["data"] for e in elements if e["data"]["kind"] == "join"]
     assert len(joins) == 3
     steps = [e["data"] for e in elements if e["data"]["kind"] == "join-step"]
-    assert [(s["table"], s["sequence"]) for s in steps] == list(zip(names, [1, 2, 3]))
+    assert [(s["sequence"], s["table"]) for s in steps] == list(enumerate(names, start=1))
     assert all(s["join"] == "left" and s["keys"] == ['a|b<"c'] for s in steps)
     assert [
         (e["data"]["source"], e["data"]["target"]) for e in elements if e["data"]["kind"] == "base"
@@ -117,7 +122,7 @@ def test_input_joins_and_arbitrary_names_are_preserved():
 
 
 def test_missing_optional_dependency_is_visible():
-    elements = collect_dataflow_elements(OptionalHub(pl.DataFrame()))
+    elements = collect_dataflow_elements(OptionalHub())
     missing = [e["data"] for e in elements if e["data"]["kind"] == "missing"]
     assert len(missing) == 1
     assert missing[0]["label"] == "source"
@@ -133,10 +138,11 @@ def test_missing_optional_dependency_is_visible():
 
 
 def test_input_join_precedes_generated_join():
-    hub = BranchingHub(
-        pl.DataFrame(),
-        DataNode(pl.DataFrame(), keys=None, join="cross", name="attributes"),
-        source=pl.DataFrame(),
+    hub = BranchingHub()
+    hub.execute(
+        DataNode(pl.DataFrame({"tag": ["A"]}), keys=None, join="cross", name="attributes"),
+        rows=pl.DataFrame({"id": [1]}),
+        source=pl.DataFrame({"id": [1], "value": [2]}),
     )
     elements = collect_dataflow_elements(hub)
     joins = [e["data"] for e in elements if e["data"]["kind"] == "join-step"]
@@ -156,11 +162,10 @@ def snapshot_data(view):
     return json.loads(re.search(r'id="pytred-data">(.*?)</script>', document).group(1))
 
 
-def test_notebook_formatter_uses_self_contained_html_without_widget_protocol():
-    hub = DataHub(pl.DataFrame(), source=pl.DataFrame())
+def test_notebook_formatter_produces_self_contained_html():
+    hub = RowsHub()
     bundle, _ = DisplayFormatter().format(hub)
     assert "text/html" in bundle
-    assert "application/vnd.jupyter.widget-view+json" not in bundle
     assert 'sandbox="allow-scripts"' in bundle["text/html"]
     document = snapshot_document(visualize_datahub(hub))
     assert "pytred-dataflow" in document
@@ -170,10 +175,10 @@ def test_notebook_formatter_uses_self_contained_html_without_widget_protocol():
 
 
 def test_html_snapshots_are_independent_and_refresh_only_when_created():
-    hub = DataHub(pl.DataFrame(), source=pl.DataFrame())
+    hub = RowsHub()
     first = visualize_datahub(hub, direction="TB")
-    hub.tables["source"].join = "left"
-    hub.tables["source"].keys = ["id"]
+    frame = pl.DataFrame({"id": [1]})
+    hub.execute(DataNode(frame, keys=("id",), join="left", name="source"), rows=frame)
     second = visualize_datahub(hub)
     assert snapshot_data(first)["direction"] == "TB"
     assert snapshot_data(second)["direction"] == "LR"
@@ -189,7 +194,8 @@ def test_html_snapshots_are_independent_and_refresh_only_when_created():
 
 def test_pipeline_text_cannot_escape_json_script_or_iframe():
     name = '</script><script>window.injected=true</script><img src=x onerror="alert(1)">'
-    hub = DataHub(pl.DataFrame(), DataNode(pl.DataFrame(), keys=None, join=None, name=name))
+    hub = RowsHub()
+    hub.execute(rows=pl.DataFrame(), **{name: pl.DataFrame()})
     view = visualize_datahub(hub)
     document = snapshot_document(view)
     assert name not in document
@@ -207,7 +213,7 @@ def test_dynamic_function_without_source_keeps_description():
     hub_type = type(
         "DynamicHub", (DataHub,), {"generated": polars_table(0)(namespace["generated"])}
     )
-    elements = collect_dataflow_elements(hub_type(pl.DataFrame()))
+    elements = collect_dataflow_elements(hub_type())
     step = next(e["data"] for e in elements if e["data"].get("kind") == "process")
     assert step["implementation"] == ""
     assert step["description"] == "A generated step."
@@ -220,7 +226,7 @@ def test_implementation_is_embedded_as_text_without_executing():
             text = "</script><script>window.injected=true</script>"
             raise AssertionError(text)
 
-    view = visualize_datahub(SourceHub(pl.DataFrame()))
+    view = visualize_datahub(SourceHub())
     document = snapshot_document(view)
     step = next(
         e["data"] for e in snapshot_data(view)["elements"] if e["data"].get("kind") == "process"

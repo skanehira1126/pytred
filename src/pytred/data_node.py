@@ -16,7 +16,7 @@ class EmptyDataNode(Generic[RoleT]):
     DataHub creates this placeholder when an optional processing method has
     missing or skipped dependencies. It is excluded from joins and treated as
     a missing dependency by downstream methods. It is not an empty DataFrame
-    and cannot be supplied as a positional input to DataHub.
+    and cannot be supplied as a positional input to execute().
 
     Parameters
     ----------
@@ -51,10 +51,10 @@ class EmptyDataNode(Generic[RoleT]):
 class DataNode(Generic[RoleT]):
     """Hold a computed Polars table, its join settings, and optional metadata.
 
-    Supply existing nodes as positional arguments to DataHub after root_df:
-    ``DataHub(root_df, node)``. The node's name makes its table available to
-    processing methods with a matching parameter name. DataHub also creates
-    nodes for keyword DataFrame inputs and processing results.
+    Supply existing non-root nodes as positional arguments to execute(). For a hub
+    with a root named rows, use ``hub.execute(node, rows=frame)``. The node's name
+    makes its table available to processing methods with a matching parameter name.
+    DataHub also creates nodes for keyword DataFrame inputs and processing results.
 
     Parameters
     ----------

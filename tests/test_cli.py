@@ -1,20 +1,21 @@
 from importlib.metadata import version
 import json
 import sys
+from typing import Annotated
 
+import polars as pl
 import pytest
 
 from pytred import DataHub
+from pytred._types import Root
 from pytred.cli.cli import cli
 from pytred.decorators import polars_table
 from pytred.metadata import TableMetadata
 
 
-class CliHub(
-    DataHub,
-    metadata=TableMetadata(description="CLI example"),
-    input_tables={"source": TableMetadata(description="CLI input")},
-):
+class CliHub(DataHub, metadata=TableMetadata(description="CLI example")):
+    source: Annotated[pl.DataFrame, Root(metadata=TableMetadata(description="CLI input"))]
+
     def __init__(self):
         pytest.fail("The CLI must not construct the pipeline")
 
