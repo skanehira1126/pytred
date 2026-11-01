@@ -3,6 +3,8 @@
 Import `Root` and `Input` from `pytred._types` and use them in `Annotated` fields
 on a direct subclass of `DataHub`. Declare one root and supply every declared
 input on each call to `execute()`.
+Input names must differ from decorated processing method names; a collision
+raises `ValueError` when the class is defined.
 
 ```python
 from typing import Annotated

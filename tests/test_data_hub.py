@@ -19,6 +19,18 @@ from .fixtures.data_hub import BranchingHub
 from .fixtures.data_hub import RowsHub
 
 
+@pytest.mark.parametrize("marker", [Input, Root])
+def test_reject_input_name_conflicting_with_processing_method(marker):
+    with pytest.raises(ValueError, match="source"):
+
+        class Hub(DataHub):
+            source: Annotated[pl.DataFrame, marker(metadata=None)]
+
+            @polars_table(0)
+            def source(self):
+                return pl.DataFrame()
+
+
 def test_root_only_and_additional_joined_input():
     rows = pl.DataFrame({"id": [1, 2]})
     frame = pl.DataFrame({"id": [1], "value": [10]})

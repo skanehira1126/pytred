@@ -90,8 +90,9 @@ class DataHub:
         """Collect this pipeline's input declarations and decorated table methods.
 
         Raises TypeError for a subclass of a user-defined hub and ValueError
-        for multiple input markers on one field, multiple root fields, or
-        multiple prepare hooks targeting one input.
+        for multiple input markers on one field, multiple root fields,
+        input names conflicting with processing methods, or multiple prepare
+        hooks targeting one input.
         """
         super().__init_subclass__(**kwargs)
         for base in cls.__bases__:
@@ -112,14 +113,13 @@ class DataHub:
                 continue
 
             dtype, *extras = get_args(annotation)
-            if sum(isinstance(marker, Input) for marker in extras) >= 2:
+            markers = [extra for extra in extras if isinstance(extra, Input)]
+            if len(markers) >= 2:
                 raise ValueError(
                     f"{cls.__name__}.{name} has multiple input markers. "
                     "Use a single Input or Root marker."
                 )
-            for extra in extras:
-                if not isinstance(extra, Input):
-                    continue
+            for extra in markers:
                 if isinstance(extra, Root):
                     if root_name is not None:
                         raise ValueError(
@@ -143,6 +143,9 @@ class DataHub:
             prepare_functions,
             validate_functions,
         ) = cls._get_decorators()
+
+        if conflicts := cls.input_tables.keys() & table_order.keys():
+            raise ValueError(f"Input tables conflict with processing methods: {sorted(conflicts)}")
 
         cls.table_join_info.update(table_join_info)
         cls.table_join_keys.update(table_join_keys)
