@@ -29,7 +29,7 @@ def _validate_signature(order: int, keys: tuple[str, ...], join: PolarsJoinMetho
         raise ValueError(f"When 'join' is {join}, keys must not be empty.")
 
 
-def _set_metadata_to_function(
+def _set_table_metadata_to_function(
     wrapper,
     order: int,
     join: PolarsJoinMethod | None,
@@ -38,11 +38,31 @@ def _set_metadata_to_function(
     metadata: TableMetadata | None = None,
 ):
     wrapper.__pytred_meta__ = {
+        "meta_type": "table",
         "table_process_order": order,
         "join": join,
         "keys": None if (len(keys) == 0 or keys[0] is None) else keys,
         "is_optional": is_optional,
         "metadata": metadata,
+    }
+
+    return wrapper
+
+
+def _set_prepare_metadata_to_function(
+    wrapper,
+    target: str,
+):
+    wrapper.__pytred_meta__ = {
+        "meta_type": "prepare",
+        "target": target,
+    }
+    return wrapper
+
+
+def _set_validate_metadata_to_function(wrapper):
+    wrapper.__pytred_meta__ = {
+        "meta_type": "validate",
     }
 
     return wrapper
@@ -136,7 +156,7 @@ def polars_table(
                         )
             return df
 
-        _wrapper = _set_metadata_to_function(
+        _wrapper = _set_table_metadata_to_function(
             _wrapper,
             order=order,
             join=join,
@@ -151,3 +171,38 @@ def polars_table(
 
 
 polars_optional_table = partial(polars_table, is_optional=True)
+
+
+def prepare_input(table_name: str):
+    """Use the decorated method's returned DataFrame as the input named table_name.
+
+    Method parameters name raw input tables from the current execute() call.
+    Each hook may read several inputs and prepares one target. Only one hook
+    per hub may prepare a given target. All hooks see the raw frames and their
+    replacements are registered together, preserving each node's join settings
+    and metadata.
+
+    Treat the supplied DataFrames as read-only and return a new frame for
+    transformations. In-place edits affect other hooks and the caller.
+    For a class method, place @classmethod above @prepare_input(...).
+    """
+
+    def decorator(func: Callable[..., pl.DataFrame]) -> Callable:
+        func = _set_prepare_metadata_to_function(
+            func,
+            target=table_name,
+        )
+        return func
+
+    return decorator
+
+
+def validate_raw_inputs(func: Callable[..., None]):
+    """Check raw input DataFrames before preparation and table execution.
+
+    Name each input to check as a method parameter. Treat the supplied frames
+    as read-only. Return None on success and raise an exception to stop the run.
+    For a class method, place @classmethod above @validate_raw_inputs.
+    """
+    func = _set_validate_metadata_to_function(func)
+    return func

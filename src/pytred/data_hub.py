@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from collections.abc import Sequence
+from dataclasses import replace
 import inspect
 from logging import getLogger
 from typing import Annotated
@@ -29,6 +30,8 @@ logger = getLogger(__name__)
 TableJoinMethod = dict[str, PolarsJoinMethod | None]
 TableJoinKeys = dict[str, Sequence[str]]
 TableExecutionOrders = dict[str, int]
+PrepareFunctions = dict[str, str]
+ValidateFunctions = list[str]
 
 
 class DataHub:
@@ -42,7 +45,8 @@ class DataHub:
 
     Create the hub without data, then pass the inputs for each run to
     ``execute()``. A parent pipeline can pass an intermediate DataFrame as
-    the named root of a child hub.
+    the named root of a child hub. Raw-input validators run before input
+    preparation. Table methods receive the prepared DataFrames.
 
     Examples
     --------
@@ -65,6 +69,8 @@ class DataHub:
     table_join_info: TableJoinMethod | None = None
     table_join_keys: TableJoinKeys | None = None
     registered_tables_order: ClassVar[TableExecutionOrders] = {}
+    prepare_functions: PrepareFunctions
+    validate_functions: ValidateFunctions
 
     metadata: ClassVar[TableMetadata | None] = None
     input_tables: ClassVar[dict[str, InputDefinition]] = {}
@@ -82,7 +88,8 @@ class DataHub:
         """Collect this pipeline's input declarations and decorated table methods.
 
         Raises TypeError for a subclass of a user-defined hub and ValueError
-        for multiple input markers on one field or multiple root fields.
+        for multiple input markers on one field, multiple root fields, or
+        multiple prepare hooks targeting one input.
         """
         super().__init_subclass__(**kwargs)
         for base in cls.__bases__:
@@ -127,12 +134,19 @@ class DataHub:
         cls.registered_tables_order = {}
 
         # get annotated functions
-        table_join_info, table_join_keys, table_order = cls._get_decorators()
+        (
+            table_join_info,
+            table_join_keys,
+            table_order,
+            prepare_functions,
+            validate_functions,
+        ) = cls._get_decorators()
 
-        # sort tables
         cls.table_join_info.update(table_join_info)
         cls.table_join_keys.update(table_join_keys)
         cls.registered_tables_order.update(table_order)
+        cls.prepare_functions = prepare_functions
+        cls.validate_functions = validate_functions
 
     @property
     def root_df(self):
@@ -197,37 +211,55 @@ class DataHub:
         TableJoinMethod,
         TableJoinKeys,
         TableExecutionOrders,
+        PrepareFunctions,
+        ValidateFunctions,
     ]:
-        """
-        Collects and organizes information from annotated functions within the class.
-        It extracts the function names, their associated join methods, and their execution order.
-
-        This method is used internally to prepare the data processing pipeline before execution,
-        ensuring that tables are created and joined in the correct order as defined by the
-        annotations.
-
-        Returns
-        -------
-        tuple[dict, dict, dict]
-            A tuple containing three elements:
-            - A dictionary mapping each function name to its specified join method.
-            - A dictionary mapping each function name to its specified join keys.
-            - A dictionary mapping each function name to its executing order
-        """
+        """Collect join settings, execution orders, prepare targets and raw validators."""
+        # tables
         table_join_info = {}
         table_join_keys = {}
         table_order = {}
+
+        # prepare inputs
+        prepare_input_fn: PrepareFunctions = {}
+
+        # validate inputs
+        validate_input_fn_list = []
+
         for member in inspect.getmembers(cls):
             function_name = member[0]
             function = member[1]
             # annotated function has table_process_order
-            if pytred_meta := getattr(function, "__pytred_meta__", None):
+            pytred_meta = getattr(function, "__pytred_meta__", None)
+            if pytred_meta is None:
+                continue
+
+            if pytred_meta["meta_type"] == "table":
                 table_join_info[function_name] = pytred_meta["join"]
                 table_order[function_name] = pytred_meta["table_process_order"]
                 if keys := pytred_meta.get("keys", None):
                     table_join_keys[function_name] = keys
 
-        return table_join_info, table_join_keys, table_order
+            if pytred_meta["meta_type"] == "prepare":
+                target = pytred_meta["target"]
+                if target in prepare_input_fn:
+                    previous = prepare_input_fn[target]
+                    raise ValueError(
+                        f"{cls.__name__} defines two prepare hooks for {target!r}: "
+                        f"{previous} and {function_name}. Combine them into one method."
+                    )
+                prepare_input_fn[target] = function_name
+
+            if pytred_meta["meta_type"] == "validate":
+                validate_input_fn_list.append(function_name)
+
+        return (
+            table_join_info,
+            table_join_keys,
+            table_order,
+            prepare_input_fn,
+            validate_input_fn_list,
+        )
 
     def get_root_table_name(self) -> str:
         """Return the declared root field name, raising RuntimeError if none is declared."""
@@ -303,9 +335,11 @@ class DataHub:
 
         Notes
         -----
-        Each call clears the previous run before validating inputs. If a
-        processing method fails, get() can inspect the inputs and intermediate
-        tables already registered during this call.
+        Each call clears the previous run, registers inputs, and runs all raw
+        validators. Prepare hooks read those inputs and their replacements are
+        applied together before the table methods run. A validation or preparation
+        error stops the run with the registered inputs still available via get().
+        If a table method fails, get() also exposes completed intermediate tables.
         """
         # initialize
         self.tables = {}
@@ -343,6 +377,9 @@ class DataHub:
         if len(self.table_order) == 0:
             raise TableNotFoundError(f"There are no table in {self.__class__.__name__}.")
 
+        self.validate_raw_tables()
+        self.prepare_tables()
+
         # On calling execute, annotated functions are executed to create each DataFrame as needed.
         # if self.table_functions is not None:
         if self.table_order is not None and max(v for v in self.table_order.values()) >= 0:
@@ -359,6 +396,42 @@ class DataHub:
             df = df.filter(filter)
 
         return df
+
+    def _hook_input_node(self, method_name: str, name: str) -> DataNode:
+        try:
+            node = self.tables[name]
+        except KeyError as err:
+            raise KeyError(
+                f"{type(self).__name__}.{method_name} requires input table {name!r}. "
+                "Supply it when calling execute()."
+            ) from err
+        if not isinstance(node, DataNode):
+            raise TypeError(
+                f"{type(self).__name__}.{method_name} requires a DataFrame for {name!r}. "
+                "The table was skipped."
+            )
+        return node
+
+    def validate_raw_tables(self):
+        """Run validators on the registered inputs. A validator exception stops execution."""
+        for method_name in self.validate_functions:
+            method = getattr(self, method_name)
+            input_names = inspect.signature(method).parameters
+            inputs = {name: self._hook_input_node(method_name, name).table for name in input_names}
+            method(**inputs)
+
+    def prepare_tables(self):
+        """Prepare replacements from raw inputs and register them once all hooks succeed."""
+        prepared_nodes = {}
+        for table_name, method_name in self.prepare_functions.items():
+            data_node = self._hook_input_node(method_name, table_name)
+            method = getattr(self, method_name)
+            input_names = inspect.signature(method).parameters
+            inputs = {name: self._hook_input_node(method_name, name).table for name in input_names}
+            prepared = method(**inputs)
+            prepared_nodes[table_name] = replace(data_node, table=prepared)
+
+        self.tables.update(prepared_nodes)
 
     def steps(self) -> pl.DataFrame:
         """
