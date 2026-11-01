@@ -142,9 +142,11 @@ input nodes in the viewer use the class declarations. See the [CLI guide](cli-gu
 
 In a notebook with trusted HTML, JavaScript and sandboxed iframe support,
 `display(hub)` shows a snapshot of the hub. Before execution you can inspect
-processing methods, their dependencies and joins. After `execute(...)`, the
-graph includes the registered inputs and their declared metadata. Taking a
-snapshot does not execute any processing methods.
+declared inputs, validators, prepare hooks, processing methods and their dependencies.
+Inputs marked 検証あり list their raw validators and argument names in the inspector.
+Prepare hooks read raw inputs; downstream methods and joins use the prepared
+tables. After `execute(...)`, the graph also includes runtime inputs and join
+settings from supplied DataNodes. Taking a snapshot does not run hooks or table methods.
 
 For a vertical layout use `display(visualize_datahub(hub, direction="TB"))`
 with `visualize_datahub` from `pytred.helpers.visualize`. The package bundles

@@ -9,20 +9,29 @@ from IPython.display import display
 display(hub)
 ```
 
-Each display is an independent snapshot. Before execution it shows the processing
-methods and their dependencies. Display the hub after `execute(...)` to see
-registered inputs, their declared metadata and any joins from supplied DataNodes.
+Each display is an independent snapshot. Before execution it shows declared
+inputs and their metadata, input hooks, processing methods and dependencies.
+Display the hub after `execute(...)` to include additional runtime inputs and
+the join settings of supplied DataNodes.
 Changing or replacing the hub does not modify previous outputs. Display it again
 to inspect its new state. No widget model, comm, or explicit close is needed.
 
 The graph shows the pipeline definition without executing any transformation.
 Input tables are blue, processing steps are gray, and the output is green.
-The blue base path follows `root_df` through numbered join operations to Output.
+The blue base path starts at the declared root (its prepared version when
+applicable) and follows numbered join operations to Output.
 Each join displays its method and keys; a dashed green edge supplies the right
 table. Gray edges show preparation dependencies. Missing input tables
 are marked in orange; optional steps remain visible even if they would be skipped.
 The output summarizes the joins followed by `post_step` and any final filters;
 it does not expand the code inside those operations.
+
+A purple prepare node reads raw inputs and produces the target's prepared
+table. Follow that table's outgoing edges to find the processing methods and
+joins that use it. A **検証あり** badge on a raw input means that it has a
+validator defined. Select the input to see each validator's name and full list
+of input names. The badge describes the definition, independently of whether
+validation has run or succeeded.
 
 Scroll to zoom, drag the background to pan, or drag individual nodes. Select a
 node on the graph or in the **Inspect** menu to highlight its upstream and
@@ -31,7 +40,7 @@ the graph and **Reset** restores automatic placement. **Direction** switches
 between top-to-bottom and left-to-right placement of the base path. Left-to-right
 is the default. Scroll horizontally in narrow notebook outputs to reach the inspector.
 
-Hover over a processing step to preview its Python implementation. Select the
+Hover over a prepare or processing step to preview its Python implementation. Select the
 node (or choose it in **Inspect**) to read, scroll, and select syntax-highlighted Python source in
 the details panel. Input, missing-input, root, and output nodes have no function
 preview. Moving off the node or pressing Escape dismisses the preview.

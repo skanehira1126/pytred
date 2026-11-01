@@ -5,12 +5,15 @@ from typing import Annotated
 
 from IPython.core.formatters import DisplayFormatter
 import polars as pl
+import pytest
 
 from pytred import DataHub
 from pytred import DataNode
 from pytred._types import Input
 from pytred._types import Root
 from pytred.decorators import polars_table
+from pytred.decorators.polars import prepare_input
+from pytred.decorators.polars import validate_raw_inputs
 from pytred.helpers.visualize import collect_dataflow_elements
 from pytred.helpers.visualize import visualize_datahub
 from pytred.metadata import TableMetadata
@@ -18,6 +21,83 @@ from pytred.metadata import TableMetadata
 from ..fixtures.data_hub import BranchingHub
 from ..fixtures.data_hub import OptionalHub
 from ..fixtures.data_hub import RowsHub
+
+
+@pytest.mark.parametrize("executed", [False, True], ids=["definition", "after_run"])
+def test_hooks_show_raw_validators_and_route_prepared_tables(executed):
+    calls = []
+
+    class Hub(DataHub):
+        orders: Annotated[pl.DataFrame, Root(metadata=None)]
+        prices: Annotated[pl.DataFrame, Input(metadata=None)]
+
+        @classmethod
+        @validate_raw_inputs
+        def check_ids(cls, orders, *, prices):
+            calls.append("check_ids")
+
+        @validate_raw_inputs
+        def check_prices(self, prices):
+            calls.append("check_prices")
+
+        @prepare_input("orders")
+        def select_orders(self, orders, prices):
+            calls.append("select_orders")
+            return orders.join(prices, on="id", how="semi")
+
+        @classmethod
+        @prepare_input("prices")
+        def clean_prices(cls, prices):
+            calls.append("clean_prices")
+            return prices.drop_nulls()
+
+        @polars_table(0)
+        def score(self, orders, prices):
+            calls.append("score")
+            return orders.join(prices, on="id")
+
+    hub = Hub()
+    if executed:
+        frame = pl.DataFrame({"id": [1]})
+        hub.execute(DataNode(frame, ("id",), "left", "prices"), orders=frame)
+    calls.clear()
+    elements = collect_dataflow_elements(hub)
+    assert not calls
+    nodes = {e["data"]["id"]: e["data"] for e in elements if "source" not in e["data"]}
+    by_label = {(n["kind"], n["label"]): n for n in nodes.values()}
+    raw = by_label["root", "orders"]
+    prices = by_label["input", "prices"]
+    check_ids = {"name": "check_ids", "inputs": ["orders", "prices"]}
+    assert raw["validators"] == [check_ids]
+    assert prices["validators"] == [check_ids, {"name": "check_prices", "inputs": ["prices"]}]
+    assert all(not n.get("validators") for n in nodes.values() if n not in (raw, prices))
+    assert "def clean_prices(" in by_label["prepare", "clean_prices"]["implementation"]
+
+    labels = {key: (n["kind"], n["label"]) for key, n in nodes.items()}
+
+    def connections(kind):
+        return {
+            (labels[e["source"]], labels[e["target"]])
+            for e in (item["data"] for item in elements)
+            if e["kind"] == kind
+        }
+
+    assert connections("dependency") == {
+        (("root", "orders"), ("prepare", "select_orders")),
+        (("input", "prices"), ("prepare", "select_orders")),
+        (("input", "prices"), ("prepare", "clean_prices")),
+        (("prepare", "select_orders"), ("prepared", "orders")),
+        (("prepare", "clean_prices"), ("prepared", "prices")),
+        (("prepared", "orders"), ("process", "score")),
+        (("prepared", "prices"), ("process", "score")),
+    }
+    if executed:
+        step = by_label["join-step", "01  LEFT JOIN"]
+        assert step["keys"] == ["id"]
+        assert connections("join") == {(("prepared", "prices"), ("join-step", step["label"]))}
+        assert (("prepared", "orders"), ("join-step", step["label"])) in connections("base")
+    else:
+        assert connections("base") == {(("prepared", "orders"), ("output", "Output"))}
 
 
 def test_input_node_displays_declared_metadata():
