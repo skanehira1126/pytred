@@ -5,6 +5,18 @@ import python from "highlight.js/lib/languages/python";
 
 hljs.registerLanguage("python", python);
 
+const validatorBadge = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="53" height="17">' +
+  '<rect width="53" height="17" rx="6" fill="#e0e7ff"/>' +
+  '<text x="26.5" y="12" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#3730a3">検証あり</text></svg>'
+);
+
+function nodeLabel(data) {
+  if (data.stage === "raw") return `${data.label} (raw)`;
+  if (data.kind === "prepared") return `${data.label} (prepared)`;
+  return data.label;
+}
+
 function showCode(element, data) {
   if (data.implementation) {
     // Only the highlighter output is HTML; it escapes the source text itself.
@@ -16,7 +28,7 @@ function showCode(element, data) {
 
 // Dependencies use Dagre; the accumulated base follows the actual join sequence.
 function arrange(cy, direction) {
-  const preparation = cy.nodes().filter(node => !["root", "output", "join-step"].includes(node.data("kind")));
+  const preparation = cy.nodes().filter(node => !["output", "join-step"].includes(node.data("kind")));
   const graph = new dagre.graphlib.Graph({ multigraph: true });
   graph.setGraph({ rankdir: "TB", nodesep: 60, ranksep: 80, marginx: 24, marginy: 24 });
   graph.setDefaultEdgeLabel(() => ({}));
@@ -33,8 +45,9 @@ function arrange(cy, direction) {
     positions.set(node.id(), { x: point.x + (direction === "LR" ? 240 : 140), y: point.y });
   });
   const baseline = Math.max(120, ...Array.from(positions.values(), point => point.y + (direction === "LR" ? 160 : 260)));
-  positions.set("root", { x: 110, y: baseline });
-  let x = 110;
+  const baseStart = cy.edges('[kind = "base"]').first().source();
+  let x = positions.get(baseStart.id()).x;
+  positions.set(baseStart.id(), { x, y: baseline });
   cy.nodes('[kind = "join-step"]').sort((a, b) => a.data("sequence") - b.data("sequence")).forEach(node => {
     const table = node.incomers('edge[kind = "join"]').source();
     x = Math.max(x + (direction === "LR" ? 260 : 140), positions.get(table.id()).x);
@@ -61,7 +74,7 @@ function render({ elements, direction: initialDirection }, el) {
       <button type="button" class="pytred-fit">Fit</button>
       <button type="button" class="pytred-reset">Reset</button>
     </div>
-    <div class="pytred-legend"><span class="base-key">━━ Base / join sequence</span> · Gray: dependency · <span class="join-key">┄ Joined table</span> · Orange: missing input</div>
+    <div class="pytred-legend"><span class="base-key">━━ Base / join sequence</span> · Gray: dependency · <span class="join-key">┄ Joined table</span> · Purple: prepare input · Orange: missing input · 検証あり: raw validator defined</div>
     <div class="pytred-workspace">
     <div class="pytred-graph">
       <div class="pytred-canvas" role="img" aria-label="Pipeline dependencies. Use the node selector below for details."></div>
@@ -99,7 +112,7 @@ function render({ elements, direction: initialDirection }, el) {
     maxZoom: 3,
     style: [
       { selector: "node", style: {
-        "label": "data(label)", "shape": "round-rectangle", "width": 190, "height": 64,
+        "label": node => nodeLabel(node.data()), "shape": "round-rectangle", "width": 190, "height": 64,
         "background-color": "#edf0f4", "border-width": 1.5, "border-color": "#94a3b8",
         "color": "#172033", "font-size": 13, "text-valign": "center", "text-halign": "center",
         "text-wrap": "ellipsis", "text-max-width": 170,
@@ -107,10 +120,20 @@ function render({ elements, direction: initialDirection }, el) {
       { selector: 'node[kind = "input"], node[kind = "root"]', style: {
         "background-color": "#e0f2fe", "border-color": "#0284c7",
       } },
+      { selector: 'node[kind = "prepare"]', style: {
+        "background-color": "#f3e8ff", "border-color": "#9333ea",
+      } },
+      { selector: 'node[kind = "prepared"]', style: {
+        "background-color": "#eef2ff", "border-color": "#6366f1",
+      } },
+      { selector: "node.with-validators", style: {
+        "background-image": validatorBadge, "background-width": 53, "background-height": 17,
+        "background-position-x": "95%", "background-position-y": "6%",
+      } },
       { selector: 'node[kind = "output"]', style: {
         "background-color": "#dcfce7", "border-color": "#16a34a", "border-width": 3,
       } },
-      { selector: 'node[kind = "missing"]', style: {
+      { selector: 'node[kind = "missing"], node[!supplied][supplied]', style: {
         "background-color": "#fff7ed", "border-color": "#ea580c", "border-style": "dashed",
       } },
       { selector: "edge", style: {
@@ -151,17 +174,22 @@ function render({ elements, direction: initialDirection }, el) {
     const related = selected.union(selected.predecessors()).union(selected.successors());
     cy.elements().difference(related).addClass("pytred-dim");
     const data = selected.data();
-    title.textContent = data.label;
+    title.textContent = nodeLabel(data);
     const lines = [`Type: ${data.kind}`];
     if (data.table) lines.push(`Right table: ${data.table}`);
+    if (data.target_table) lines.push(`Prepares input: ${data.target_table}`);
+    if (data.validators?.length) {
+      lines.push("Raw-input validators:");
+      for (const hook of data.validators) lines.push(`  ${hook.name}(${hook.inputs.join(", ")})`);
+    }
     if (data.kind === "output") lines.push("Joined base, followed by post_step and final filters.");
     if (data.order !== undefined && data.order >= 0) lines.push(`Execution order: ${data.order}`);
     if (data.optional) lines.push("Optional step: skipped when a required input is missing.");
     if (data.join) lines.push(`Join: ${data.join}${data.keys.length ? ` on ${data.keys.join(", ")}` : ""}`);
-    if (data.kind === "missing") lines.push("This dependency has not been supplied.");
+    if (data.kind === "missing" || data.supplied === false) lines.push("This input has not been supplied.");
     if (data.description) lines.push(data.description);
     details.textContent = lines.join("\n");
-    if (data.kind === "process") {
+    if (data.kind === "process" || data.kind === "prepare") {
       showCode(implementation, data);
       implementation.hidden = false;
     }
@@ -172,12 +200,15 @@ function render({ elements, direction: initialDirection }, el) {
     cy.add(elements);
     direction.value = initialDirection;
     picker.replaceChildren(new Option("All nodes", ""));
-    cy.nodes().forEach((node) => picker.add(new Option(node.data("label"), node.id())));
+    cy.nodes().forEach(node => {
+      if (node.data("validators")?.length) node.addClass("with-validators");
+      picker.add(new Option(nodeLabel(node.data()), node.id()));
+    });
     arrange(cy, direction.value);
     inspectNode();
   }
   cy.on("select unselect", "node", inspectNode);
-  cy.on("mouseover", 'node[kind = "process"]', (event) => {
+  cy.on("mouseover", 'node[kind = "process"], node[kind = "prepare"]', (event) => {
     const data = event.target.data();
     previewTitle.textContent = data.label;
     showCode(previewCode, data);

@@ -21,12 +21,12 @@ Read only the relevant guidance below. Section names refer to the bundled [usage
 | Define input, intermediate, or output metadata | Define Table Metadata |
 | Inspect metadata or use the pytred CLI | [CLI guide](references/cli-guide.md) |
 
-Use a `DataHub` subclass for reusable transformations and positional `DataNode` inputs for already computed tables. Keep the scope of the answer tied to the request; a usage explanation does not require creating a notebook.
+Identify the root, required inputs and output join keys before writing a pipeline. Keep the scope of the answer tied to the request; a usage explanation does not require creating a notebook.
 
 ## Use the right evidence
 
 - For a usage question, start with the guide and the user's code. The plugin supplies instructions, not the Python package or the pytred source repository.
-- Before executing a pipeline, use the project's Python environment and check that pytred is available. Resolve version-sensitive questions against that installed package; use a source checkout when the task is developing pytred itself.
+- This guide targets pytred 1.x, with `Root` and `Input` in `pytred._types`. Before executing a pipeline, check the installed version in the project's Python environment. For another version, inspect its API before adapting these examples.
 - The guide's Source Map lists optional checkout references. Do not assume those files exist in the user's project, or require a checkout to use the bundled guide.
 - Infer input schemas and join keys from supplied code or data. If a missing choice would change the resulting rows or columns, ask a focused question; otherwise make the assumption explicit and continue.
 

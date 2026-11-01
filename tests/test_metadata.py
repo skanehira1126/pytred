@@ -8,11 +8,12 @@ from pytred.metadata import TableMetadata
 
 
 def test_create_metadata_with_minimal_arguments():
-    """Allow minimal input and supply defaults for omitted dates and collections."""
     column = ColumnMetadata(name="id")
     table = TableMetadata()
 
     assert column.name == "id"
+    assert not column.nullable and not column.is_categorical
+    assert column.categories == ()
     assert column.null_meaning is None
     assert column.updated_on is None
     assert table.roles == ()
@@ -22,15 +23,28 @@ def test_create_metadata_with_minimal_arguments():
 
 
 def test_preserve_unique_columns_and_composite_key():
-    """Preserve unique columns and composite keys as tuples in the supplied order."""
     columns = (ColumnMetadata(name="player_id"), ColumnMetadata(name="reference_date"))
 
     table = TableMetadata(primary_key=("player_id", "reference_date"), columns=columns)
 
     assert table.primary_key == ("player_id", "reference_date")
-    assert isinstance(table.primary_key, tuple)
     assert table.columns == columns
-    assert isinstance(table.columns, tuple)
+
+
+@pytest.mark.parametrize(
+    "model, fields, invalid_field",
+    [
+        (ColumnMetadata, {"name": "id", "nullabel": True}, "nullabel"),
+        (TableMetadata, {"primary_keys": ("id",)}, "primary_keys"),
+        (ColumnMetadata, {"name": "id", "nullable": "false"}, "nullable"),
+        (TableMetadata, {"primary_key": ["id"]}, "primary_key"),
+    ],
+    ids=["unknown-column-field", "unknown-table-field", "coerced-flag", "coerced-key"],
+)
+def test_reject_metadata_that_would_lose_or_coerce_a_declaration(model, fields, invalid_field):
+    with pytest.raises(ValidationError) as error:
+        model(**fields)
+    assert invalid_field in [issue["loc"][0] for issue in error.value.errors()]
 
 
 def test_reject_duplicate_column_names():

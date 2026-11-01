@@ -1,6 +1,6 @@
 # Pytred CLI
 
-Requires pytred 0.5.0 or later in the project's Python environment. The plugin
+This guide describes pytred 1.x in the project's Python environment. The plugin
 does not install the Python package. Replace the target with an importable
 `module:DataHubSubclass` from the user's project.
 
@@ -13,7 +13,7 @@ The command prints JSON without constructing or executing the DataHub. It import
 the target module, so module-level code still runs.
 
 - `DataHub`: class name and output metadata.
-- `tables`: generated tables, declared inputs (pytred 0.5.1+), and inferred inputs,
+- `tables`: generated tables, inputs declared with Root/Input, and inferred inputs,
   with `order`, `name`, `depends`,
   and `is_optional`. Input tables use order `-1` and `is_optional: null`.
 - `is_optional` is a definition flag, not an execution or skip result.
@@ -22,9 +22,8 @@ the target module, so module-level code still runs.
 
 For declaration syntax and its relationship to runtime DataNodes, read
 [Define Table Metadata](usage-guide.md#define-table-metadata).
-In pytred 0.5.1+, dependencies without a processing method as their producer
-appear once as input entries with `unset` metadata when undeclared.
-Pytred 0.5.0 marks inferred input entries `unsupported` instead.
+Dependencies without a processing method as their producer appear once as
+input entries with `unset` metadata when undeclared.
 
 For a dictionary in Python, pass the class directly:
 

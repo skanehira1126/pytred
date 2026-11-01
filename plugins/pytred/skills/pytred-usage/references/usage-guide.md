@@ -2,225 +2,159 @@
 
 ## Core Model
 
-- `DataHub` executes decorated methods in ascending `@polars_table(order, ...)` order, joins selected tables into `root_df`, and returns a `polars.DataFrame`. Give a producing method a lower order than its consumers; dependencies do not automatically reorder methods.
-- A `@polars_table(...)` method defines one table in the pipeline. The method name becomes that table's name.
-- Method parameter names are table dependencies. They can refer to:
-  - keyword input tables passed into `DataHub(...)`
-  - positional `DataNode` inputs
-  - outputs of earlier decorated methods
-- `root_df` is the output backbone. Any table with a non-`None` `join` is joined into `root_df`.
-- Positional `DataNode` inputs are already computed tables. When supplying them, pass `root_df` as the first positional argument: `DataHub(root_df, node_a, node_b)`.
-- Keyword `pl.DataFrame` inputs are named dependencies with `join=None`; they do not automatically join into the result.
-- `join=None` means "build this table for downstream steps only." It is available to later methods but does not appear in the final output unless another joined table selects from it.
-- `is_optional=True` skips a decorated method if a required table is missing or was skipped. It does not suppress errors from a method that runs.
-- `hub()` and `hub.execute()` are equivalent. Passing `pl.Expr` filters applies them after all joins and `post_step()`.
+Define each pipeline as a direct subclass of `DataHub`. Construct the hub
+without input tables. Call `hub.execute(...)` or `hub(...)` with the tables
+for that run.
+
+- Declare exactly one `Root` and any other required `Input` fields with
+  `Annotated`. Use `metadata=None` when there is no metadata. Supply every
+  declared name on each run, even if only an optional method uses it.
+- Pass the root as a named Polars DataFrame. Additional named DataFrames
+  become dependencies with `join=None`. Positional DataNodes carry their own
+  names, keys and join strategies.
+- A method decorated with `@polars_table` produces one table named after the
+  method. Its parameter names refer to inputs or earlier results. Set producers'
+  order lower than their consumers' order; methods execute in ascending order.
+- A non-None join adds the table to the root. A table with `join=None` stays
+  available for later methods. The optional `filter=pl.Expr` runs after the joins
+  and `post_step()`.
+- Each call clears the previous run. Use `hub.get(name).table` to inspect a
+  computed table, including an input. If a method raises, tables registered
+  before the error in this run are still available.
 
 ## Build a Reusable Pipeline Class
 
-Use a `DataHub` subclass when the preprocessing steps should be reusable and dependency-aware.
-
-This snippet assumes an existing `titanic` DataFrame with `record_id`, `survived`, `sex`, `sibsp`, `parch`, and `age` columns, and unique `record_id` values.
-
 ```python
+from typing import Annotated
+
 import polars as pl
 
 from pytred import DataHub
+from pytred._types import Input, Root
 from pytred.decorators import polars_table
 
 
-class PassengerFeatures(DataHub):
-    """Join reusable passenger features onto a root passenger table."""
+class OrderFeatures(DataHub):
+    customers: Annotated[pl.DataFrame, Root(metadata=None)]
+    orders: Annotated[pl.DataFrame, Input(metadata=None)]
 
     @polars_table(0)
-    def replace_sex(self, titanic: pl.DataFrame) -> pl.DataFrame:
-        """Encode `sex` as an integer feature."""
-        return titanic.select(
-            "record_id",
-            sex_replaced=pl.when(pl.col("sex") == "male").then(1).otherwise(0),
-        )
+    def paid(self, orders):
+        return orders.filter(pl.col("paid"))
 
-    @polars_table(1)
-    def family_features(self, titanic: pl.DataFrame) -> pl.DataFrame:
-        """Build an intermediate table used by later steps only."""
-        return titanic.select(
-            "record_id",
-            cnt_family=pl.col("sibsp") + pl.col("parch"),
-        )
-
-    @polars_table(2, "record_id", join="left", is_optional=True)
-    def filled_age(self, ages: pl.DataFrame) -> pl.DataFrame:
-        """Fill missing ages when an auxiliary age table is available."""
-        return ages.select(
-            "record_id",
-            filled_age=pl.col("age").fill_null(pl.col("age").mean()),
-        )
-
-    @polars_table(3, "record_id", join="left")
-    def selected_features(
-        self,
-        replace_sex: pl.DataFrame,
-        family_features: pl.DataFrame,
-    ) -> pl.DataFrame:
-        """Select intermediate features that should be exposed in the output."""
-        return replace_sex.join(family_features, on="record_id", how="left").select(
-            "record_id",
-            "sex_replaced",
-            "cnt_family",
-        )
-
-    def post_step(self, df: pl.DataFrame) -> pl.DataFrame:
-        """Apply final shaping after all joins complete."""
-        return df.sort("record_id")
+    @polars_table(1, "customer_id", join="left")
+    def totals(self, paid):
+        return paid.group_by("customer_id").agg(total=pl.col("amount").sum())
 
 
-hub = PassengerFeatures(
-    root_df=titanic.select("record_id", "survived"),
-    titanic=titanic,
-    ages=titanic.select("record_id", "age"),
+hub = OrderFeatures()
+output = hub.execute(
+    customers=pl.DataFrame({"customer_id": [1, 2]}),
+    orders=pl.DataFrame({
+        "customer_id": [1, 1, 2],
+        "amount": [10, 20, 30],
+        "paid": [True, True, False],
+    }),
+    filter=pl.col("total").is_not_null(),
 )
-
-output = hub(pl.col("survived") == 1)
+# output contains one row: customer_id=1, total=30.
 ```
 
-With the inputs above, `output` contains surviving passengers (`survived == 1`), sorted by `record_id`, with columns in this order: `record_id`, `survived`, `filled_age`, `sex_replaced`, `cnt_family`.
+A child pipeline can be constructed alongside its parent. In the parent method,
+call the child's `execute()` and pass the desired intermediate DataFrame under
+the child's root name. The child has its own inputs and run state.
 
-Important details:
-
-- The keyword argument `titanic=...` creates an input table named `titanic`, so the `replace_sex()` and `family_features()` parameters must also be named `titanic`.
-- The keyword argument `ages=...` is available to `filled_age()` because the parameter name matches the table name.
-- `replace_sex()` and `family_features()` are intermediate tables because their decorators have no join information. Their features join the output once through `selected_features()`.
-- `is_optional=True` skips `filled_age()` when `ages` is not provided.
-- `post_step()` runs after all joins and before any filters passed to `hub(...)`.
-
-## Compose Existing Tables with `DataNode`
-
-Use plain `DataHub(...)` plus positional `DataNode` objects when the feature tables already exist and only need to be joined.
-
-This snippet assumes existing `titanic`, `replaced_sex`, and `filled_age` DataFrames sharing the `record_id` key.
+## Compose Existing Tables with DataNode
 
 ```python
+from typing import Annotated
+
 import polars as pl
 
-from pytred import DataHub
-from pytred import DataNode
+from pytred import DataHub, DataNode
+from pytred._types import Input, Root
 
 
-hub = DataHub(
-    titanic.select("record_id"),
-    DataNode(
-        table=replaced_sex,
-        keys=["record_id"],
-        join="left",
-        name="replaced_sex",
-    ),
-    DataNode(
-        table=filled_age,
-        keys=["record_id"],
-        join="left",
-        name="filled_age",
-    ),
+class JoinedScores(DataHub):
+    rows: Annotated[pl.DataFrame, Root(metadata=None)]
+    scores: Annotated[pl.DataFrame, Input(metadata=None)]
+
+
+scores = DataNode(
+    table=pl.DataFrame({"id": [1], "score": [7]}),
+    keys=("id",), join="left", name="scores",
 )
-
-output = hub()
+output = JoinedScores().execute(scores, rows=pl.DataFrame({"id": [1, 2]}))
+# Rows (id, score): (1, 7), (2, null).
 ```
 
-Guidance:
-
-- Use positional `DataNode(...)` inputs for already-computed joinable tables.
-- Use keyword `pl.DataFrame` inputs when the table is only a named dependency for decorated methods.
-- Avoid passing a completed joinable table as `some_name=df` unless you intentionally want it registered as a non-joined input table.
+The positional node supplies the declared name `scores`. Passing a DataFrame
+as `scores=...` would make it available as a dependency with no join.
 
 ## Define Table Metadata
 
-Input declarations require pytred 0.5.1 or later. Define input metadata with the
-DataHub class's `input_tables`, intermediate table metadata with
-`@polars_table(metadata=...)`, and output metadata with the class's `metadata`.
+Use `Root(metadata=...)` or `Input(metadata=...)` for input metadata, the
+decorator's `metadata` argument for a generated table, and the class keyword
+`metadata` for the final output.
 
 ```python
+from typing import Annotated
+
 import polars as pl
 
 from pytred import DataHub
+from pytred._types import Root
 from pytred.decorators import polars_table
 from pytred.helpers.metadata import get_datahub_metadata
-from pytred.metadata import ColumnMetadata
-from pytred.metadata import TableMetadata
+from pytred.metadata import ColumnMetadata, TableMetadata
 
 
-class Scores(DataHub, input_tables={
-    "source": TableMetadata(description="Observed scores", primary_key=("id",)),
-}, metadata=TableMetadata(description="Scores joined to the requested IDs")):
+class Scores(DataHub, metadata=TableMetadata(description="Scored orders")):
+    orders: Annotated[pl.DataFrame, Root(metadata=TableMetadata(primary_key=("id",)))]
+
     @polars_table(0, "id", join="left", metadata=TableMetadata(
-        description="Selected scores",
-        columns=(ColumnMetadata(name="score", description="Observed score"),),
+        columns=(ColumnMetadata(name="score", description="Twice the amount"),),
     ))
-    def scores(self, source):
-        return source.select("id", "score")
+    def scores(self, orders):
+        return orders.select("id", score=pl.col("amount") * 2)
 
 
-hub = Scores(
-    pl.DataFrame({"id": [1, 2]}),
-    source=pl.DataFrame({"id": [1, 2], "score": [10, 20]}),
-)
-output = hub()  # columns: id, score; rows: (1, 10), (2, 20)
 definitions = get_datahub_metadata(Scores)
 ```
 
-Declarations describe the pipeline; they do not load data, enforce required inputs,
-validate DataFrame schemas, or change joins and optional-step behavior. Input and
-output declarations are not inherited automatically. Reuse a parent's inputs
-explicitly with `input_tables=ParentHub.input_tables` when appropriate.
-
-Supplied DataNodes retain their own metadata. Input declarations do not synchronize
-with `hub.get(name).metadata`; metadata inspection and input-node visualization use
-the class declaration, without falling back to the supplied node's metadata.
-Generated nodes receive their decorator's metadata, including skipped optional nodes.
-For CLI usage and the output format, read the [CLI guide](cli-guide.md).
+Metadata describes tables and columns independently of the values supplied at
+runtime. A supplied DataNode retains its own metadata. CLI inspection and the
+input nodes in the viewer use the class declarations. See the [CLI guide](cli-guide.md).
 
 ## Inspect and Debug
 
-- Call `hub.get("table_name")` after execution to access a specific created table as a `DataNode`.
-- `@polars_table` enforces that the decorated function returns `pl.DataFrame`.
-- If `join` is not `None`, the declared key columns must exist in the returned DataFrame.
-- Duplicate key rows raise `DuplicatedError` unless `is_validate_unique=False`.
-- Join names are passed to Polars. Check the project's installed Polars version for version-sensitive choices such as `full`/`outer` or `right`.
-- `cross` and `None` should not declare keys.
-- Instantiating `DataHub` with no tables raises `TableNotFoundError`.
+- For a missing required input error, compare the supplied names with all
+  `Root` and `Input` declarations, including names supplied by DataNodes.
+- For a missing method dependency, check the spelling and the producer's order.
+  `is_optional=True` skips a step when a dependency is missing or was skipped.
+  To make a lookup genuinely optional, accept it as an additional runtime input
+  and leave it out of the required declarations.
+- Return a Polars DataFrame from each table method. For keyed joins, return
+  all join keys and check uniqueness (enabled by default). Omit keys for
+  `cross` and `None`. Check the installed Polars for supported join strategies.
 
 ## Notebook Visualization
 
-Display a DataHub instance in a notebook that supports trusted HTML, JavaScript,
-and sandboxed iframes:
+In a notebook with trusted HTML, JavaScript and sandboxed iframe support,
+`display(hub)` shows a snapshot of the hub. Before execution you can inspect
+declared inputs, validators, prepare hooks, processing methods and their dependencies.
+Inputs marked 検証あり list their raw validators and argument names in the inspector.
+Prepare hooks read raw inputs; downstream methods and joins use the prepared
+tables. After `execute(...)`, the graph also includes runtime inputs and join
+settings from supplied DataNodes. Taking a snapshot does not run hooks or table methods.
 
-```python
-from IPython.display import display
-
-
-display(hub)
-```
-
-The Cytoscape.js graph shows dependencies and joins without executing the pipeline.
-Zoom or pan the graph, select a node to inspect its metadata and related steps,
-and switch between vertical and horizontal placement. Missing inputs are explicit;
-optional steps remain part of the displayed definition.
-In pytred 0.5.1+, input nodes include metadata and descriptions from `input_tables`.
-Declarations do not add nodes or change dependencies and joins. Pass an instance,
-not the DataHub class, to visualization.
-
-For a displayable HTML snapshot, use `visualize_datahub(hub, direction="LR")` from
-`pytred.helpers.visualize`. Each display captures the current definition; display
-again after changing it. The JavaScript libraries are bundled, so no CDN, Node.js,
-or widget manager is needed. The notebook must allow trusted HTML with JavaScript
-and sandboxed iframe support. Previous outputs remain independent snapshots.
-The old Mermaid renderer, image-export helper, and report CLI have been removed.
+For a vertical layout use `display(visualize_datahub(hub, direction="TB"))`
+with `visualize_datahub` from `pytred.helpers.visualize`. The package bundles
+the JavaScript and CSS used for notebook interaction.
 
 ## Source Map
 
-These paths belong to the [pytred source repository](https://github.com/skanehira1126/pytred), not the plugin installation or the user's project. They are optional references when that checkout is available. For version-specific behavior in another project, inspect its installed pytred package.
-
-- `src/pytred/data_hub.py`: execution order, table creation, joining, `post_step()`, and filters.
-- `src/pytred/decorators/polars.py`: decorator contract and validation rules.
-- `tests/fixtures/data_hub.py`: small end-to-end examples for subclass usage and optional tables.
-- `examples/01_basic_preprocessing.ipynb`: subclass-based preprocessing walkthrough.
-- `examples/02_use_completed_data.ipynb`: `DataNode` composition workflow.
-- `examples/03_visualize_workflow.ipynb`: notebook visualization examples.
-- `docs/tutorials/visualization.md`: notebook controls and environment requirements.
+In a [pytred checkout](https://github.com/skanehira1126/pytred), see
+`src/pytred/data_hub.py` for input registration, execution order and joins,
+`src/pytred/decorators/polars.py` for table validation, and
+`docs/tutorials/visualization.md` for viewer controls.

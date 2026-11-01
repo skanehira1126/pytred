@@ -1,11 +1,22 @@
+from typing import Annotated
+
 import polars as pl
 
 from pytred import DataHub
+from pytred._types import Input
+from pytred._types import Root
 from pytred.decorators import polars_table
+
+
+class RowsHub(DataHub):
+    rows: Annotated[pl.DataFrame, Root(metadata=None)]
 
 
 class BranchingHub(DataHub):
     """Combine two features derived from one input."""
+
+    rows: Annotated[pl.DataFrame, Root(metadata=None)]
+    source: Annotated[pl.DataFrame, Input(metadata=None)]
 
     @polars_table(0)
     def doubled(self, source):
@@ -28,6 +39,8 @@ class BranchingHub(DataHub):
 
 
 class OptionalHub(DataHub):
+    rows: Annotated[pl.DataFrame, Root(metadata=None)]
+
     @polars_table(0, is_optional=True)
     def prepared(self, source):
         return source

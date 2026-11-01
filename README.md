@@ -1,33 +1,82 @@
 # pytred
 Python Tools for Refinement and Enhancement of Data
 
-## Introduction
+Define a Polars pipeline as a direct subclass of `DataHub`. Each decorated method
+produces a table. Method arguments name its dependencies, and the decorator
+specifies its execution order and how to join its output to the root table.
 
-`pytred` is a Python toolkit designed to streamline the organization and execution of data processing tasks. 
-Iht facilitates a structured approach to data operations, allowing each function to be treated as an independent data processing unit, similar to how one might think of tables in a relational database.
+## Quick start
 
-## Features
-- **Structured Data Processing**: `pytred` enables users to organize their data processing logic in a clear and modular way, with each function acting as a table in relational database.
-- **Flexible and Reusable**: By encapsulating data processing tasks within functions, pytred promotes reusability and flexibility, allowing for easy modification and extension of data processing workflows.
-- **Clear and Maintainable** Code: The framework promotes a clean separation of concerns, which simplifies understanding, maintaining, and debugging the data processing steps.
+This guide targets pytred 1.x (Python 3.11–3.14). Install it in your project's
+Python environment:
+
+```bash
+pip install "pytred>=1.0.0,<2"
+```
+
+For development, run `pip install -e .` from the repository root.
+
+```python
+from typing import Annotated
+
+import polars as pl
+
+from pytred import DataHub
+from pytred._types import Input, Root
+from pytred.decorators import polars_table
+from pytred.metadata import TableMetadata
+
+
+class CustomerTotals(DataHub):
+    customers: Annotated[pl.DataFrame, Root(metadata=None)]
+    orders: Annotated[pl.DataFrame, Input(metadata=TableMetadata(description="Order amounts"))]
+
+    @polars_table(0, "id", join="left")
+    def totals(self, orders):
+        return orders.group_by("id").agg(total=pl.col("amount").sum())
+
+
+hub = CustomerTotals()
+result = hub.execute(
+    customers=pl.DataFrame({"id": [1, 2]}),
+    orders=pl.DataFrame({"id": [1, 1], "amount": [10, 20]}),
+)
+# result has columns id, total and rows (1, 30), (2, null).
+```
+
+Choose one `Root` as the starting table for joins. Supply it by keyword and
+provide every declared input on each call. Additional named DataFrames are
+available to methods by name. Pass a positional `DataNode` to `execute()` to
+supply a computed, non-root table with its own name, join method and keys.
+
+For a full outer join, use `join="full"` with a decorator or a `DataNode`.
+Migrate existing `join="outer"` declarations to `join="full"`. The installed
+Polars version must support the selected strategy (`full` from 0.20.29 and
+`right` from 1.1.0).
+
+Each call clears the previous run's tables. After execution,
+`hub.get("totals").table` returns the intermediate result. After a processing
+error, `get()` can inspect tables already registered in that run. To compose
+pipelines, pass a parent step's DataFrame to a child hub's `execute()` as its
+named root.
 
 ## Examples
 
-1. [basic preprocessing](./examples/01_basic_preprocessing.ipynb)
-1. [Preprocessing with completed data](./examples/02_use_completed_data.ipynb)
-1. [visualize workflow](./examples/03_visualize_workflow.ipynb)
+1. [basic preprocessing](https://github.com/skanehira1126/pytred/blob/main/examples/01_basic_preprocessing.ipynb)
+1. [Preprocessing with completed data](https://github.com/skanehira1126/pytred/blob/main/examples/02_use_completed_data.ipynb)
+1. [visualize workflow](https://github.com/skanehira1126/pytred/blob/main/examples/03_visualize_workflow.ipynb)
 
 ## Notebook visualization
 
-Use `display(hub)` in a notebook with Jupyter Widgets support to explore the
+Use `display(hub)` in a notebook with trusted HTML, JavaScript and sandboxed iframe support to explore the
 pipeline interactively. Zoom, pan, select a node to inspect dependencies and join
 conditions, or switch the layout direction. Rendering does not execute the pipeline.
 Cytoscape.js and Dagre are bundled with the package; no CDN or Node.js is required.
-See the [visualization guide](docs/tutorials/visualization.md).
+See the [visualization guide](https://github.com/skanehira1126/pytred/blob/main/docs/tutorials/visualization.md).
 
 ## Metadata inspection
 
-Python 3.11 or later is required. Define table and column metadata with
+Python 3.11 through 3.14 is supported. Define table and column metadata with
 `pytred.metadata.TableMetadata` and `ColumnMetadata`. Pass table metadata to
 `@polars_table(..., metadata=...)` or declare output metadata on a DataHub subclass
 with `class MyDataHub(DataHub, metadata=...):`.
@@ -59,55 +108,10 @@ methods, and `null` for input tables where it does not apply. This describes
 whether a method can be skipped when dependencies are missing, not whether it
 was skipped during an execution.
 
-Declare input metadata independently of runtime data with `input_tables`:
-
-```python
-from pytred import DataHub
-from pytred.metadata import TableMetadata
-
-class MyDataHub(DataHub, input_tables={
-    "source": TableMetadata(description="Source observations", primary_key=("id",)),
-    "lookup": None,
-}):
-    pass
-
-metadata = get_datahub_metadata(MyDataHub)
-```
-
-`MyDataHub.input_tables` contains the declarations, including unused inputs.
-Omitting `input_tables` (or passing `None`) leaves declarations empty, just as
-output `metadata` is not inherited automatically. Each class uses only the
-declarations explicitly passed to it. To reuse a parent's declarations, pass
-`input_tables=ParentHub.input_tables`, or extend them explicitly with
-`{**ParentHub.input_tables, "extra": TableMetadata(...)}`. The mapping is copied.
-Names must be
-non-empty strings and must not collide with decorated processing methods.
-Values must be `TableMetadata` or `None`; `None` declares a name without metadata.
-
-Input declarations describe the pipeline independently of runtime DataNodes.
-The CLI and visualization read input metadata from `input_tables`; they do not
-fall back to metadata on supplied nodes. DataHub retains supplied DataNodes as-is,
-including their metadata and join settings, without copying them or emitting warnings.
-`hub.get(name).metadata` therefore need not match the pipeline declaration.
-Named DataFrame inputs are wrapped in DataNodes without metadata. Undeclared
-inputs remain accepted.
-Declarations do not load data, validate DataFrame schemas, or make inputs required:
-missing dependencies still skip optional steps and fail required steps as before.
-Metadata output includes declared inputs and dependencies without a processing
-method as their producer. Undeclared inputs have `metadata_status: "unset"` and
-`metadata: null`; shared dependencies appear only once. A table produced by a
-later processing method is not treated as an external input.
-Input declarations are optional and do not affect execution.
-
-`visualize_datahub(hub)` displays an existing DataHub instance. Input nodes include
-metadata and descriptions from the hub's input declarations. Declarations do not
-add graph nodes or change dependencies and joins; missing dependencies remain
-missing even when their names are declared.
-
-In 0.5.1, the internal type alias `POLARS_JOIN_METHOD` is renamed to `PolarsJoinMethod`.
-
-In 0.5.0, `DataHub.registerd_tables_order` is renamed to
-`DataHub.registered_tables_order`; update any direct references to the old name.
+Input definitions come from the class annotations shown in the quick start.
+Set `metadata=None` when a table has no description. The CLI reads declared
+metadata without inspecting DataFrame contents. A supplied DataNode keeps its
+own metadata, so its runtime metadata may differ from the pipeline declaration.
 
 ## Codex plugin
 
@@ -115,13 +119,8 @@ This repository includes a Codex plugin that teaches AI agents how to use
 `DataHub`, `DataNode`, `@polars_table`, and interactive notebook visualization without relying
 on generic data-pipeline assumptions.
 
-Install the Python package in your project's environment as usual:
-
-```bash
-pip install pytred
-```
-
-Install the Codex plugin separately from the repository marketplace:
+The plugin's guide targets pytred 1.x. Install the Python package as shown in
+Quick start, then install the Codex plugin separately from the repository marketplace:
 
 ```bash
 codex plugin marketplace add skanehira1126/pytred
