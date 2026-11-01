@@ -26,7 +26,7 @@ Identify the root, required inputs and output join keys before writing a pipelin
 ## Use the right evidence
 
 - For a usage question, start with the guide and the user's code. The plugin supplies instructions, not the Python package or the pytred source repository.
-- Before executing a pipeline, use the project's Python environment and check that pytred is available. These examples use the development API with `Root` and `Input` in `pytred._types`. Check that those imports exist and inspect the installed `DataHub.execute` signature before applying the guide to a released package.
+- This guide targets pytred 1.x, with `Root` and `Input` in `pytred._types`. Before executing a pipeline, check the installed version in the project's Python environment. For another version, inspect its API before adapting these examples.
 - The guide's Source Map lists optional checkout references. Do not assume those files exist in the user's project, or require a checkout to use the bundled guide.
 - Infer input schemas and join keys from supplied code or data. If a missing choice would change the resulting rows or columns, ask a focused question; otherwise make the assumption explicit and continue.
 

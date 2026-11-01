@@ -8,6 +8,8 @@ nav:
   - API Reference:
       - DataHub: "api_reference/data_hub.md"
       - DataNode: "api_reference/data_node.md"
+      - Input declarations: "api_reference/inputs.md"
+      - Metadata: "api_reference/metadata.md"
       - decorators: "api_reference/decorators.md"
   - Tutorials:
       - Visualization: "tutorials/visualization.md"

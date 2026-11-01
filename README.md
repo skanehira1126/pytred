@@ -7,8 +7,14 @@ specifies its execution order and how to join its output to the root table.
 
 ## Quick start
 
-This example uses the development checkout (Python 3.11–3.14). Install it with
-`pip install -e .` from the repository root.
+This guide targets pytred 1.x (Python 3.11–3.14). Install it in your project's
+Python environment:
+
+```bash
+pip install "pytred>=1.0.0,<2"
+```
+
+For development, run `pip install -e .` from the repository root.
 
 ```python
 from typing import Annotated
@@ -56,9 +62,9 @@ named root.
 
 ## Examples
 
-1. [basic preprocessing](./examples/01_basic_preprocessing.ipynb)
-1. [Preprocessing with completed data](./examples/02_use_completed_data.ipynb)
-1. [visualize workflow](./examples/03_visualize_workflow.ipynb)
+1. [basic preprocessing](https://github.com/skanehira1126/pytred/blob/main/examples/01_basic_preprocessing.ipynb)
+1. [Preprocessing with completed data](https://github.com/skanehira1126/pytred/blob/main/examples/02_use_completed_data.ipynb)
+1. [visualize workflow](https://github.com/skanehira1126/pytred/blob/main/examples/03_visualize_workflow.ipynb)
 
 ## Notebook visualization
 
@@ -66,7 +72,7 @@ Use `display(hub)` in a notebook with trusted HTML, JavaScript and sandboxed ifr
 pipeline interactively. Zoom, pan, select a node to inspect dependencies and join
 conditions, or switch the layout direction. Rendering does not execute the pipeline.
 Cytoscape.js and Dagre are bundled with the package; no CDN or Node.js is required.
-See the [visualization guide](docs/tutorials/visualization.md).
+See the [visualization guide](https://github.com/skanehira1126/pytred/blob/main/docs/tutorials/visualization.md).
 
 ## Metadata inspection
 
@@ -107,24 +113,14 @@ Set `metadata=None` when a table has no description. The CLI reads declared
 metadata without inspecting DataFrame contents. A supplied DataNode keeps its
 own metadata, so its runtime metadata may differ from the pipeline declaration.
 
-In 0.5.1, the internal type alias `POLARS_JOIN_METHOD` is renamed to `PolarsJoinMethod`.
-
-In 0.5.0, `DataHub.registerd_tables_order` is renamed to
-`DataHub.registered_tables_order`; update any direct references to the old name.
-
 ## Codex plugin
 
 This repository includes a Codex plugin that teaches AI agents how to use
 `DataHub`, `DataNode`, `@polars_table`, and interactive notebook visualization without relying
 on generic data-pipeline assumptions.
 
-For a released version, install the Python package in your project's environment:
-
-```bash
-pip install pytred
-```
-
-Install the Codex plugin separately from the repository marketplace:
+The plugin's guide targets pytred 1.x. Install the Python package as shown in
+Quick start, then install the Codex plugin separately from the repository marketplace:
 
 ```bash
 codex plugin marketplace add skanehira1126/pytred

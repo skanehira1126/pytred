@@ -1,6 +1,6 @@
 # Pytred CLI
 
-Requires pytred 0.5.0 or later in the project's Python environment. The plugin
+This guide describes pytred 1.x in the project's Python environment. The plugin
 does not install the Python package. Replace the target with an importable
 `module:DataHubSubclass` from the user's project.
 
@@ -22,9 +22,8 @@ the target module, so module-level code still runs.
 
 For declaration syntax and its relationship to runtime DataNodes, read
 [Define Table Metadata](usage-guide.md#define-table-metadata).
-In pytred 0.5.1+, dependencies without a processing method as their producer
-appear once as input entries with `unset` metadata when undeclared.
-Pytred 0.5.0 marks inferred input entries `unsupported` instead.
+Dependencies without a processing method as their producer appear once as
+input entries with `unset` metadata when undeclared.
 
 For a dictionary in Python, pass the class directly:
 
