@@ -1,5 +1,9 @@
 from importlib.metadata import version
 import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
 import sys
 from typing import Annotated
 
@@ -13,7 +17,7 @@ from pytred.decorators import polars_table
 from pytred.metadata import TableMetadata
 
 
-class CliHub(DataHub, metadata=TableMetadata(description="CLI example")):
+class CliHub(DataHub, metadata=TableMetadata(description="注文の集計")):
     source: Annotated[pl.DataFrame, Root(metadata=TableMetadata(description="CLI input"))]
 
     def __init__(self):
@@ -24,17 +28,22 @@ class CliHub(DataHub, metadata=TableMetadata(description="CLI example")):
         pytest.fail("The CLI must not execute processing methods")
 
 
-def test_metadata_command(monkeypatch, capsys):
+def test_installed_metadata_command_resolves_target_and_prints_only_json(tmp_path, monkeypatch):
     target = f"{__name__}:CliHub"
-    monkeypatch.setattr(sys, "argv", ["pytred", "metadata", target])
-
-    cli()
-
-    captured = capsys.readouterr()
-    result = json.loads(captured.out)
-    assert captured.err == ""
+    entry_point = shutil.which("pytred", path=str(Path(sys.executable).parent))
+    assert entry_point is not None, "Missing pytred console script in this Python environment"
+    monkeypatch.setenv("PYTHONPATH", str(Path(__file__).resolve().parents[1]), prepend=os.pathsep)
+    process = subprocess.run(
+        [entry_point, "metadata", target],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    result = json.loads(process.stdout)
+    assert process.stderr == ""
     assert result["DataHub"]["name"] == target
-    assert result["DataHub"]["metadata"]["description"] == "CLI example"
+    assert result["DataHub"]["metadata"]["description"] == "注文の集計"
     source, table = result["tables"]
     assert source["name"] == "source"
     assert source["is_optional"] is None
@@ -62,3 +71,13 @@ def test_version_command(monkeypatch, capsys):
 
     assert exc_info.value.code == 0
     assert capsys.readouterr().out.strip() == f"pytred {version('pytred')}"
+
+
+def test_metadata_command_without_target_exits_with_usage_error(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["pytred", "metadata"])
+    with pytest.raises(SystemExit) as error:
+        cli()
+    assert error.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "target" in captured.err

@@ -11,6 +11,7 @@ from pytred._types import Root
 from pytred.decorators.polars import polars_table
 from pytred.decorators.polars import prepare_input
 from pytred.decorators.polars import validate_raw_inputs
+from pytred.exceptions import InvalidReturnValueError
 from pytred.metadata import TableMetadata
 
 
@@ -48,7 +49,7 @@ def test_prepares_read_raw_inputs_and_join_their_replacements():
     assert prices.columns == ["id", "price"]
 
 
-def test_failed_raw_validation_stops_preparation_and_processing():
+def test_validation_failure_leaves_raw_input_and_next_run_can_recover():
     class Hub(DataHub):
         orders: Annotated[pl.DataFrame, Root(metadata=None)]
 
@@ -60,17 +61,23 @@ def test_failed_raw_validation_stops_preparation_and_processing():
 
         @prepare_input("orders")
         def discard_negative(self, orders):
-            pytest.fail("prepare ran after validation failed")
+            return orders.filter(pl.col("amount") > 0)
 
         @polars_table(0)
         def summary(self, orders):
-            pytest.fail("table method ran after validation failed")
+            return orders.select(total=pl.col("amount").sum())
 
     orders = pl.DataFrame({"amount": [-1]})
     hub = Hub()
     with pytest.raises(ValueError, match="Negative amount"):
         hub.execute(orders=orders)
     assert_frame_equal(hub.get("orders").table, orders)
+    with pytest.raises(KeyError, match="summary"):
+        hub.get("summary")
+
+    output = hub.execute(orders=pl.DataFrame({"amount": [0, 4]}))
+    assert_frame_equal(output, pl.DataFrame({"amount": [4]}))
+    assert_frame_equal(hub.get("summary").table, pl.DataFrame({"total": [4]}))
 
 
 def test_failed_prepare_leaves_registered_inputs_raw():
@@ -91,6 +98,45 @@ def test_failed_prepare_leaves_registered_inputs_raw():
     with pytest.raises(ValueError, match="Incomplete lookup"):
         hub.execute(rows=rows, lookup=rows)
     assert_frame_equal(hub.root_df, rows)
+
+
+@pytest.mark.parametrize("invalid_result", [None, pl.LazyFrame()], ids=["none", "lazy-frame"])
+def test_invalid_prepare_result_leaves_all_registered_inputs_raw(invalid_result):
+    class Hub(DataHub):
+        rows: Annotated[pl.DataFrame, Root(metadata=None)]
+        catalog: Annotated[pl.DataFrame, Input(metadata=None)]
+
+        @prepare_input("rows")
+        def first(self, rows):
+            return rows.head(0)
+
+        @prepare_input("catalog")
+        def second(self, catalog):
+            return invalid_result
+
+        @polars_table(0)
+        def summary(self, rows):
+            pytest.fail("table method ran after preparation failed")
+
+    rows = pl.DataFrame({"id": [1]})
+    catalog = pl.DataFrame({"sku": [2]})
+    hub = Hub()
+    with pytest.raises(InvalidReturnValueError, match="Hub.second.*catalog"):
+        hub.execute(rows=rows, catalog=catalog)
+    assert_frame_equal(hub.root_df, rows)
+    assert_frame_equal(hub.get("catalog").table, catalog)
+
+
+def test_prepare_accepts_an_empty_dataframe():
+    class Hub(DataHub):
+        rows: Annotated[pl.DataFrame, Root(metadata=None)]
+
+        @prepare_input("rows")
+        def select_rows(self, rows):
+            return rows.head(0)
+
+    rows = pl.DataFrame({"id": [1]})
+    assert_frame_equal(Hub().execute(rows=rows), pl.DataFrame(schema={"id": pl.Int64}))
 
 
 def test_duplicate_prepare_target_identifies_both_hooks():

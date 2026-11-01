@@ -17,8 +17,10 @@ from pytred._types import Input
 from pytred._types import InputDefinition
 from pytred._types import PolarsJoinMethod
 from pytred._types import Root
+from pytred._types import validate_polars_join
 from pytred.data_node import DataNode
 from pytred.data_node import EmptyDataNode
+from pytred.exceptions import InvalidReturnValueError
 from pytred.exceptions import TableNotFoundError
 from pytred.helpers import visualize
 from pytred.helpers.decorator import get_metadata
@@ -164,12 +166,13 @@ class DataHub:
     def validate_tables_is_node(self, *tables) -> list[DataNode]:
         """Return positional DataNodes in order, preserving their join settings.
 
-        Raises TypeError for a non-node argument or ValueError for a node
-        named after the root, which must be supplied as a keyword DataFrame.
+        Raises TypeError for a non-node argument or ValueError for an unsupported
+        join or a node named after the root, which must be a keyword DataFrame.
         """
         input_data_node = []
         for data_node in tables:
             if isinstance(data_node, DataNode):
+                validate_polars_join(data_node.join)
                 input_data_node.append(data_node)
             else:
                 raise TypeError(f"tables must be DataNode, not {type(data_node)}.")
@@ -332,6 +335,8 @@ class DataHub:
         ValueError
             A declared input is missing, an input name is supplied more than
             once, or a positional DataNode has the root's name.
+        TableNotFoundError
+            A required processing method depends on unregistered or skipped tables.
 
         Notes
         -----
@@ -421,7 +426,11 @@ class DataHub:
             method(**inputs)
 
     def prepare_tables(self):
-        """Prepare replacements from raw inputs and register them once all hooks succeed."""
+        """Prepare replacements from raw inputs and register them once all hooks succeed.
+
+        Raises InvalidReturnValueError if a hook returns anything other than
+        a Polars DataFrame. Registered inputs retain their raw tables on failure.
+        """
         prepared_nodes = {}
         for table_name, method_name in self.prepare_functions.items():
             data_node = self._hook_input_node(method_name, table_name)
@@ -429,6 +438,11 @@ class DataHub:
             input_names = inspect.signature(method).parameters
             inputs = {name: self._hook_input_node(method_name, name).table for name in input_names}
             prepared = method(**inputs)
+            if not isinstance(prepared, pl.DataFrame):
+                raise InvalidReturnValueError(
+                    f"{type(self).__name__}.{method_name} must return a polars.DataFrame "
+                    f"for input {table_name!r}, got {type(prepared).__name__}."
+                )
             prepared_nodes[table_name] = replace(data_node, table=prepared)
 
         self.tables.update(prepared_nodes)
@@ -488,6 +502,9 @@ class DataHub:
     def create_tables(self):
         """
         Creates tables based on the annotated functions and their execution order.
+
+        Raises TableNotFoundError with the method name and all unavailable
+        dependencies when a required method cannot run.
         """
         for _, name, arg_table_names in self.collect_table_and_arguments(self.table_order):
             # data processing function
@@ -499,18 +516,32 @@ class DataHub:
                 for t in arg_table_names
                 if t not in self.tables or isinstance(self.tables[t], EmptyDataNode)
             ]
-            if get_metadata(process_fn, "is_optional") and missing_tables:
-                logger.debug(
-                    f"Process '{name}' is skipped, because these tables are not found: "
-                    f"{missing_tables}"
-                )
-                self.tables[name] = EmptyDataNode(
-                    name=name,
-                    join=self.table_join_info[name],
-                    keys=self.table_join_keys.get(name),
-                    is_optional=True,
-                    metadata=get_metadata(process_fn, "metadata"),
-                )
+            if missing_tables:
+                if get_metadata(process_fn, "is_optional"):
+                    logger.debug(
+                        f"Process '{name}' is skipped, because these tables are not found: "
+                        f"{missing_tables}"
+                    )
+                    self.tables[name] = EmptyDataNode(
+                        name=name,
+                        join=self.table_join_info[name],
+                        keys=self.table_join_keys.get(name),
+                        is_optional=True,
+                        metadata=get_metadata(process_fn, "metadata"),
+                    )
+                else:
+                    details = [
+                        (
+                            f"{table_name} (not registered)"
+                            if table_name not in self.tables
+                            else f"{table_name} (skipped)"
+                        )
+                        for table_name in missing_tables
+                    ]
+                    raise TableNotFoundError(
+                        f"{type(self).__name__}.{name} cannot run because required tables "
+                        f"are unavailable: {', '.join(details)}."
+                    )
             else:
                 table = process_fn(*[self.get(table_name).table for table_name in arg_table_names])
                 self.tables[name] = DataNode(

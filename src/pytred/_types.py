@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Literal
 from typing import TypedDict
+from typing import TypeGuard
+from typing import get_args
 
 from pydantic import BaseModel
 
@@ -11,6 +13,18 @@ from pytred.metadata import TableMetadata
 META_KEYS = Literal["table_process_order", "join", "keys", "is_optional", "metadata"]
 
 PolarsJoinMethod = Literal["inner", "left", "right", "full", "semi", "anti", "cross"]
+
+
+def check_polars_join_keys(join: str | None) -> TypeGuard[PolarsJoinMethod | None]:
+    """Return whether pytred accepts this Polars join strategy."""
+    return join is None or join in get_args(PolarsJoinMethod)
+
+
+def validate_polars_join(join: str | None) -> PolarsJoinMethod | None:
+    if check_polars_join_keys(join):
+        return join
+    choices = ", ".join(get_args(PolarsJoinMethod))
+    raise ValueError(f"Unsupported join {join!r}. Choose from {choices} or None.")
 
 
 class Input(BaseModel):

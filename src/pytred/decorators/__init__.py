@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Literal
-from typing import TypeGuard
 
-from pytred._types import PolarsJoinMethod
+from pytred._types import check_polars_join_keys as check_polars_join_keys
+from pytred._types import validate_polars_join
 from pytred.decorators.polars import polars_table
 
 
@@ -32,33 +32,8 @@ def table(
         duplicate entries based on the keys.
     """
 
-    if engine == "polars":
-        if check_polars_join_keys(join):
-            return polars_table(order, *keys, join=join, is_validate_unique=is_validate_unique)
-        else:
-            raise ValueError("join must be 'inner', 'left', 'outer', 'semi', 'anti' or 'cross'.")
-    else:
+    if engine != "polars":
         raise ValueError("engine must be 'polars only'.")
-
-
-def check_polars_join_keys(
-    join: str | None,
-) -> TypeGuard[PolarsJoinMethod | None]:
-    """
-    Validates whether the specified join method is supported by the Polars engine.
-
-    Parameters
-    ----------
-    join : str
-        The join method to validate, which can be "inner", "left", "outer", "semi",
-        "anti", "cross", or None.
-
-    Returns
-    -------
-    bool
-        Returns True if the join method is valid; otherwise, returns False.
-    """
-    if join in ["inner", "left", "outer", "semi", "anti", "cross"] or join is None:
-        return True
-    else:
-        return False
+    return polars_table(
+        order, *keys, join=validate_polars_join(join), is_validate_unique=is_validate_unique
+    )

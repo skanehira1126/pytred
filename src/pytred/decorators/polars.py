@@ -8,6 +8,7 @@ from logging import getLogger
 import polars as pl
 
 from pytred._types import PolarsJoinMethod
+from pytred._types import validate_polars_join
 from pytred.exceptions import DuplicatedError
 from pytred.exceptions import InvalidReturnValueError
 from pytred.metadata import TableMetadata
@@ -17,6 +18,7 @@ logger = getLogger(__name__)
 
 
 def _validate_signature(order: int, keys: tuple[str, ...], join: PolarsJoinMethod | None = None):
+    validate_polars_join(join)
     if not isinstance(order, int):
         raise ValueError("order must be int.")
     if isinstance(order, int) and order < 0:
@@ -87,9 +89,8 @@ def polars_table(
     keys : tuple
         The keys to be used for joining data tables. If keys are provided, the decorator will check
         for their presence in the DataFrame returned by the function.
-    join : {‘inner’, ‘left’, ‘outer’, ‘semi’, ‘anti’, ‘cross’, ‘outer_coalesce’}, optional
-        The type of join to be used when combining data tables. Supported join types are 'inner',
-        'left', 'outer', 'semi', 'anti', and 'cross'.
+    join : PolarsJoinMethod, optional
+        The Polars join strategy. Use 'full' for a full outer join.
         If join is None, it implies that the resulting table from this function is intended for use
         only within preprocessing steps and will not be directly included in the final output of
         the DataHub pipeline.
@@ -181,6 +182,9 @@ def prepare_input(table_name: str):
     per hub may prepare a given target. All hooks see the raw frames and their
     replacements are registered together, preserving each node's join settings
     and metadata.
+
+    During execution, a non-DataFrame return value raises InvalidReturnValueError
+    before any prepared replacements are registered. Empty DataFrames are valid.
 
     Treat the supplied DataFrames as read-only and return a new frame for
     transformations. In-place edits affect other hooks and the caller.

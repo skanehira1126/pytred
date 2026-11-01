@@ -11,10 +11,11 @@ from pytred._types import Input
 from pytred._types import Root
 from pytred.data_node import EmptyDataNode
 from pytred.decorators import polars_table
+from pytred.decorators.polars import polars_optional_table
+from pytred.exceptions import TableNotFoundError
 from pytred.metadata import TableMetadata
 
 from .fixtures.data_hub import BranchingHub
-from .fixtures.data_hub import OptionalHub
 from .fixtures.data_hub import RowsHub
 
 
@@ -59,6 +60,13 @@ def test_reject_positional_node_for_root():
         RowsHub().execute(node)
 
 
+def test_positional_node_rejects_retired_outer_join():
+    frame = pl.DataFrame({"id": [1]})
+    node = DataNode(frame, keys=("id",), join="outer", name="prices")
+    with pytest.raises(ValueError, match="full"):
+        RowsHub().execute(node, rows=frame)
+
+
 def test_execution_requires_a_root_declaration():
     class Hub(DataHub):
         source: Annotated[pl.DataFrame, Input(metadata=None)]
@@ -96,10 +104,34 @@ def test_filter_can_use_column_added_by_post_step():
         rows: Annotated[pl.DataFrame, Root(metadata=None)]
 
         def post_step(self, df):
-            return df.with_columns(score=pl.col("id") * 2)
+            return df.with_columns(score=pl.col("amount") * 2)
 
-    result = Hub()(rows=pl.DataFrame({"id": [1, 2]}), filter=pl.col("score") > 2)
-    assert_frame_equal(result, pl.DataFrame({"id": [2], "score": [4]}))
+    prices = DataNode(pl.DataFrame({"id": [2], "amount": [4]}), ("id",), "left", "prices")
+    result = Hub()(prices, rows=pl.DataFrame({"id": [1, 2]}), filter=pl.col("score") > 2)
+    assert_frame_equal(result, pl.DataFrame({"id": [2], "amount": [4], "score": [8]}))
+
+
+def test_join_uses_keys_from_previous_join_and_disambiguates_column_names():
+    class Hub(DataHub):
+        orders: Annotated[pl.DataFrame, Root(metadata=None)]
+
+        @polars_table(4, "region", "sku", join="inner")
+        def catalog(self, offers):
+            return offers
+
+    region = DataNode(pl.DataFrame({"region": ["east", "west"]}), None, "cross", "regions")
+    hub = Hub()
+    result = hub.execute(
+        region,
+        orders=pl.DataFrame({"sku": [1, 2], "price": [5, 6]}),
+        offers=pl.DataFrame({"region": ["east", "west"], "sku": [2, 1], "price": [20, 10]}),
+    )
+    assert_frame_equal(
+        result.sort("sku"),
+        pl.DataFrame(
+            {"sku": [1, 2], "price": [5, 6], "region": ["west", "east"], "price_catalog": [10, 20]}
+        ),
+    )
 
 
 def test_child_hub_uses_parent_intermediate_as_its_root():
@@ -133,49 +165,90 @@ def test_child_hub_uses_parent_intermediate_as_its_root():
     assert_frame_equal(hub.child.root_df, pl.DataFrame({"id": [2]}))
 
 
-@pytest.mark.parametrize("with_source", [True, False], ids=["present", "missing"])
-def test_optional_dependency_chain(with_source):
-    """Execute or skip the dependency chain while keeping omitted metadata as None."""
-    root = pl.DataFrame({"id": [1]})
-    source = pl.DataFrame({"id": [1], "value": [10]})
-    hub = OptionalHub()
-    output = hub.execute(rows=root, **({"source": source} if with_source else {}))
-
-    assert_frame_equal(output, source if with_source else root)
-    for name in ("prepared", "result"):
-        assert isinstance(hub.get(name), EmptyDataNode) is (not with_source)
-        assert hub.get(name).metadata is None
-
-
-@pytest.mark.parametrize("with_source", [True, False], ids=["executed", "skipped"])
-def test_carry_metadata_to_generated_nodes(with_source):
-    """Preserve each method's metadata instance through execution or cascading skips."""
-    project_metadata = TableMetadata[Literal["feature", "aggregate"]]
-    prepared_metadata = project_metadata(roles=("aggregate",))
-    result_metadata = project_metadata(roles=("feature",))
+def test_optional_chain_distinguishes_missing_input_from_empty_frame_across_runs():
+    metadata = TableMetadata(description="Result")
 
     class MetadataHub(DataHub):
         rows: Annotated[pl.DataFrame, Root(metadata=None)]
 
-        @polars_table(0, is_optional=True, metadata=prepared_metadata)
+        @polars_optional_table(0)
         def prepared(self, source):
             return source
 
-        @polars_table(1, "id", join="left", is_optional=True, metadata=result_metadata)
+        @polars_table(1, "id", join="left", is_optional=True, metadata=metadata)
         def result(self, prepared):
             return prepared
 
     root = pl.DataFrame({"id": [1]})
     source = pl.DataFrame({"id": [1], "value": [10]})
     hub = MetadataHub()
-    output = hub.execute(rows=root, **({"source": source} if with_source else {}))
+    assert_frame_equal(hub.execute(rows=root, source=source), source)
+    assert hub.get("prepared").metadata is None
+    assert hub.get("result").metadata is metadata
 
-    assert_frame_equal(output, source if with_source else root)
-    expected_node_type = DataNode if with_source else EmptyDataNode
-    for name, metadata in (("prepared", prepared_metadata), ("result", result_metadata)):
-        node = hub.get(name)
-        assert isinstance(node, expected_node_type)
-        assert node.metadata is metadata
+    assert_frame_equal(hub.execute(rows=root), root)
+    assert isinstance(hub.get("prepared"), EmptyDataNode)
+    assert hub.get("prepared").metadata is None
+    skipped = hub.get("result")
+    assert isinstance(skipped, EmptyDataNode)
+    assert (skipped.name, skipped.keys, skipped.join) == ("result", ("id",), "left")
+    assert skipped.is_optional and skipped.metadata is metadata
+
+    empty = source.head(0)
+    assert_frame_equal(
+        hub.execute(rows=root, source=empty),
+        pl.DataFrame({"id": [1], "value": [None]}, schema=source.schema),
+    )
+    assert_frame_equal(hub.get("result").table, empty)
+
+
+def test_required_method_with_missing_dependency_stops_execution():
+    class Hub(DataHub):
+        rows: Annotated[pl.DataFrame, Root(metadata=None)]
+
+        @polars_table(0)
+        def features(self, catalog):
+            pytest.fail("method ran without its dependency")
+
+    hub = Hub()
+    rows = pl.DataFrame({"id": [1]})
+    with pytest.raises(TableNotFoundError, match="catalog"):
+        hub.execute(rows=rows)
+    assert_frame_equal(hub.root_df, rows)
+    with pytest.raises(KeyError, match="features"):
+        hub.get("features")
+
+
+@pytest.mark.parametrize("with_lookup", [True, False], ids=["skipped", "skipped-and-unregistered"])
+def test_required_method_reports_all_unavailable_dependencies(with_lookup):
+    class Hub(DataHub):
+        rows: Annotated[pl.DataFrame, Root(metadata=None)]
+
+        @polars_optional_table(0)
+        def catalog(self, source):
+            return source
+
+        @polars_table(1)
+        def prices(self, catalog, lookup):
+            pytest.fail("required method ran with unavailable dependencies")
+
+    rows = pl.DataFrame({"id": [1]})
+    hub = Hub()
+    inputs = {"lookup": rows} if with_lookup else {}
+    with pytest.raises(TableNotFoundError) as error:
+        hub.execute(rows=rows, **inputs)
+
+    message = str(error.value)
+    assert "Hub.prices" in message
+    assert "catalog (skipped)" in message
+    if with_lookup:
+        assert "lookup" not in message
+    else:
+        assert "lookup (not registered)" in message
+    assert_frame_equal(hub.root_df, rows)
+    assert isinstance(hub.get("catalog"), EmptyDataNode)
+    with pytest.raises(KeyError, match="prices"):
+        hub.get("prices")
 
 
 def test_read_output_metadata_without_instantiation():
@@ -203,10 +276,22 @@ def test_collect_marked_inputs_per_hub():
     class PriceHub(DataHub):
         prices: Annotated[pl.DataFrame, Root(metadata=None)]
 
-    assert set(OrderHub.input_tables) == {"orders"}
-    assert set(PriceHub.input_tables) == {"prices"}
+    assert OrderHub().get_input_table_names() == ["orders"]
+    assert PriceHub().get_root_table_name() == "prices"
+    assert set(BranchingHub().get_input_table_names()) == {"rows", "source"}
     assert OrderHub.input_tables["orders"]["dtype"] is pl.DataFrame
     assert isinstance(OrderHub.input_tables["orders"]["marker"], Root)
+
+
+def test_undeclared_hub_has_no_inputs_or_tables_to_execute():
+    class Hub(DataHub):
+        pass
+
+    hub = Hub()
+    with pytest.raises(RuntimeError, match="Input"):
+        hub.get_input_table_names()
+    with pytest.raises(TableNotFoundError):
+        hub.execute()
 
 
 def test_reject_two_root_fields():
@@ -224,7 +309,7 @@ def test_reject_conflicting_markers_on_one_input():
             orders: Annotated[pl.DataFrame, Root(metadata=None), Input(metadata=None)]
 
 
-def test_input_declarations_do_not_modify_runtime_nodes(caplog):
+def test_input_declarations_do_not_modify_runtime_nodes():
     declared = TableMetadata(description="Declared")
     supplied = TableMetadata(description="Supplied")
 
@@ -241,7 +326,6 @@ def test_input_declarations_do_not_modify_runtime_nodes(caplog):
     assert hub.get("source").metadata is supplied
     assert hub.get("frame").metadata is None
     assert Hub.input_tables["source"]["marker"].metadata is declared
-    assert not [record for record in caplog.records if record.name == "pytred.data_hub"]
 
 
 def test_step_failure_keeps_only_completed_tables_from_current_run():

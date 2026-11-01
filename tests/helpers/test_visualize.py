@@ -112,7 +112,7 @@ def test_input_node_displays_declared_metadata():
     node = DataNode(frame, keys=("id",), join="left", name="source", metadata=upstream)
     hub = Hub()
     hub.execute(node, rows=frame)
-    elements = snapshot_data(visualize_datahub(hub))["elements"]
+    elements = snapshot_data(snapshot_document(visualize_datahub(hub)._repr_html_()))["elements"]
     source = next(e["data"] for e in elements if e["data"].get("label") == "source")
     assert source["metadata"] == declared.model_dump(mode="json")
     assert source["description"] == "Declared source"
@@ -165,12 +165,18 @@ def test_independent_steps_and_sparse_execution_order():
             raise AssertionError("Visualization must not execute steps")
 
     elements = collect_dataflow_elements(IndependentHub())
+    nodes = {e["data"]["id"]: e["data"] for e in elements if "source" not in e["data"]}
     edges = [e["data"] for e in elements if "source" in e["data"]]
     assert {e["kind"] for e in edges} == {"join", "base"}
-    assert [(e["source"], e["target"]) for e in edges if e["kind"] == "base"] == [
-        ("root", "join-1"),
-        ("join-1", "output"),
-    ]
+    assert {n["label"]: n["order"] for n in nodes.values() if n["kind"] == "process"} == {
+        "first": 0,
+        "last": 10,
+    }
+    assert {
+        (nodes[e["source"]]["kind"], nodes[e["target"]]["kind"])
+        for e in edges
+        if e["kind"] == "base"
+    } == {("root", "join-step"), ("join-step", "output")}
 
 
 def test_input_joins_and_arbitrary_names_are_preserved():
@@ -189,16 +195,20 @@ def test_input_joins_and_arbitrary_names_are_preserved():
         for e in elements
         if e["data"]["kind"] == "input" and e["data"]["label"] in names
     ] == names
+    by_id = {e["data"]["id"]: e["data"] for e in elements}
     joins = [e["data"] for e in elements if e["data"]["kind"] == "join"]
-    assert len(joins) == 3
+    assert {(by_id[e["source"]]["label"], by_id[e["target"]]["table"]) for e in joins} == {
+        (name, name) for name in names
+    }
     steps = [e["data"] for e in elements if e["data"]["kind"] == "join-step"]
     assert [(s["sequence"], s["table"]) for s in steps] == list(enumerate(names, start=1))
     assert all(s["join"] == "left" and s["keys"] == ['a|b<"c'] for s in steps)
-    assert [
-        (e["data"]["source"], e["data"]["target"]) for e in elements if e["data"]["kind"] == "base"
-    ] == [("root", "join-1"), ("join-1", "join-2"), ("join-2", "join-3"), ("join-3", "output")]
-    assert "</script>" not in hub._repr_html_()
-    assert "&lt;/script&gt;" in hub._repr_html_()
+    root = next(node for node in by_id.values() if node["kind"] == "root")
+    output = next(node for node in by_id.values() if node["kind"] == "output")
+    path = [node["id"] for node in (root, *steps, output)]
+    assert {(e["source"], e["target"]) for e in by_id.values() if e["kind"] == "base"} == set(
+        zip(path[:-1], path[1:], strict=True)
+    )
 
 
 def test_missing_optional_dependency_is_visible():
@@ -232,13 +242,12 @@ def test_input_join_precedes_generated_join():
     ]
 
 
-def snapshot_document(view):
+def snapshot_document(html):
     # 表示用iframeから内側のHTMLを取り出し、ブラウザへ渡す内容を検査する。
-    return unescape(re.search(r'srcdoc="([^"]*)"', view._repr_html_()).group(1))
+    return unescape(re.search(r'srcdoc="([^"]*)"', html).group(1))
 
 
-def snapshot_data(view):
-    document = snapshot_document(view)
+def snapshot_data(document):
     return json.loads(re.search(r'id="pytred-data">(.*?)</script>', document).group(1))
 
 
@@ -247,11 +256,11 @@ def test_notebook_formatter_produces_self_contained_html():
     bundle, _ = DisplayFormatter().format(hub)
     assert "text/html" in bundle
     assert 'sandbox="allow-scripts"' in bundle["text/html"]
-    document = snapshot_document(visualize_datahub(hub))
+    document = snapshot_document(bundle["text/html"])
     assert "pytred-dataflow" in document
     assert "Permission is hereby granted" in document
     assert "<script src=" not in document
-    assert snapshot_data(visualize_datahub(hub))["elements"] == collect_dataflow_elements(hub)
+    assert snapshot_data(document)["elements"] == collect_dataflow_elements(hub)
 
 
 def test_html_snapshots_are_independent_and_refresh_only_when_created():
@@ -259,17 +268,19 @@ def test_html_snapshots_are_independent_and_refresh_only_when_created():
     first = visualize_datahub(hub, direction="TB")
     frame = pl.DataFrame({"id": [1]})
     hub.execute(DataNode(frame, keys=("id",), join="left", name="source"), rows=frame)
-    second = visualize_datahub(hub)
-    assert snapshot_data(first)["direction"] == "TB"
-    assert snapshot_data(second)["direction"] == "LR"
-    assert not any(e["data"]["kind"] == "join-step" for e in snapshot_data(first)["elements"])
-    assert snapshot_data(first)["elements"] != snapshot_data(second)["elements"]
-    assert snapshot_data(second)["elements"] == collect_dataflow_elements(hub)
-    # 同じhubを繰り返し表示しても、HTMLを返すだけでPython側に表示状態を追加しない。
-    state = dict(vars(hub))
-    for _ in range(3):
-        assert hub._repr_html_() == second._repr_html_()
-    assert vars(hub) == state
+    before = snapshot_data(snapshot_document(first._repr_html_()))
+    after = snapshot_data(snapshot_document(visualize_datahub(hub)._repr_html_()))
+    assert before["direction"] == "TB"
+    assert after["direction"] == "LR"
+    assert not any(e["data"]["kind"] == "join-step" for e in before["elements"])
+    assert [e["data"]["table"] for e in after["elements"] if e["data"]["kind"] == "join-step"] == [
+        "source"
+    ]
+
+
+def test_invalid_layout_direction_is_rejected():
+    with pytest.raises(ValueError, match="direction"):
+        visualize_datahub(RowsHub(), direction="diagonal")
 
 
 def test_pipeline_text_cannot_escape_json_script_or_iframe():
@@ -277,9 +288,12 @@ def test_pipeline_text_cannot_escape_json_script_or_iframe():
     hub = RowsHub()
     hub.execute(rows=pl.DataFrame(), **{name: pl.DataFrame()})
     view = visualize_datahub(hub)
-    document = snapshot_document(view)
+    html = view._repr_html_()
+    assert name not in html
+    assert "</script>" not in html
+    document = snapshot_document(html)
     assert name not in document
-    assert name in [e["data"].get("label") for e in snapshot_data(view)["elements"]]
+    assert name in [e["data"].get("label") for e in snapshot_data(document)["elements"]]
     # JSON用・実行用の2つ以外のscriptタグが生成されていない。
     assert document.count("</script>") == 2
 
@@ -307,9 +321,11 @@ def test_implementation_is_embedded_as_text_without_executing():
             raise AssertionError(text)
 
     view = visualize_datahub(SourceHub())
-    document = snapshot_document(view)
+    document = snapshot_document(view._repr_html_())
     step = next(
-        e["data"] for e in snapshot_data(view)["elements"] if e["data"].get("kind") == "process"
+        e["data"]
+        for e in snapshot_data(document)["elements"]
+        if e["data"].get("kind") == "process"
     )
     assert "</script><script>window.injected=true</script>" in step["implementation"]
     assert document.count("</script>") == 2

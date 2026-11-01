@@ -43,6 +43,11 @@ provide every declared input on each call. Additional named DataFrames are
 available to methods by name. Pass a positional `DataNode` to `execute()` to
 supply a computed, non-root table with its own name, join method and keys.
 
+For a full outer join, use `join="full"` with a decorator or a `DataNode`.
+Migrate existing `join="outer"` declarations to `join="full"`. The installed
+Polars version must support the selected strategy (`full` from 0.20.29 and
+`right` from 1.1.0).
+
 Each call clears the previous run's tables. After execution,
 `hub.get("totals").table` returns the intermediate result. After a processing
 error, `get()` can inspect tables already registered in that run. To compose
