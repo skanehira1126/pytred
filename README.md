@@ -11,7 +11,7 @@ This guide targets pytred 1.x (Python 3.11–3.14). Install the wheel from
 GitHub Releases in your project's Python environment:
 
 ```bash
-pip install https://github.com/skanehira1126/pytred/releases/download/1.0.0/pytred-1.0.0-py3-none-any.whl
+pip install https://github.com/skanehira1126/pytred/releases/download/1.0.1/pytred-1.0.1-py3-none-any.whl
 ```
 
 For development, run `pip install -e .` from the repository root.

@@ -143,7 +143,7 @@ input nodes in the viewer use the class declarations. See the [CLI guide](cli-gu
 In a notebook with trusted HTML, JavaScript and sandboxed iframe support,
 `display(hub)` shows a snapshot of the hub. Before execution you can inspect
 declared inputs, validators, prepare hooks, processing methods and their dependencies.
-Inputs marked 検証あり list their raw validators and argument names in the inspector.
+Inputs marked **Validation** list their raw validators and argument names in the inspector.
 Prepare hooks read raw inputs; downstream methods and joins use the prepared
 tables. After `execute(...)`, the graph also includes runtime inputs and join
 settings from supplied DataNodes. Taking a snapshot does not run hooks or table methods.

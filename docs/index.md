@@ -4,7 +4,7 @@ This documentation describes pytred 1.x. Install the wheel from GitHub Releases
 with Python 3.11–3.14:
 
 ```bash
-pip install https://github.com/skanehira1126/pytred/releases/download/1.0.0/pytred-1.0.0-py3-none-any.whl
+pip install https://github.com/skanehira1126/pytred/releases/download/1.0.1/pytred-1.0.1-py3-none-any.whl
 ```
 
 Define a pipeline as a direct subclass of `DataHub`. Declare the base table
