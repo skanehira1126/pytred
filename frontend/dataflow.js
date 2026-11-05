@@ -8,7 +8,7 @@ hljs.registerLanguage("python", python);
 const validatorBadge = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="53" height="17">' +
   '<rect width="53" height="17" rx="6" fill="#e0e7ff"/>' +
-  '<text x="26.5" y="12" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#3730a3">検証あり</text></svg>'
+  '<text x="26.5" y="12" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#3730a3">Validation</text></svg>'
 );
 
 function nodeLabel(data) {
@@ -74,7 +74,7 @@ function render({ elements, direction: initialDirection }, el) {
       <button type="button" class="pytred-fit">Fit</button>
       <button type="button" class="pytred-reset">Reset</button>
     </div>
-    <div class="pytred-legend"><span class="base-key">━━ Base / join sequence</span> · Gray: dependency · <span class="join-key">┄ Joined table</span> · Purple: prepare input · Orange: missing input · 検証あり: raw validator defined</div>
+    <div class="pytred-legend"><span class="base-key">━━ Base / join sequence</span> · Gray: dependency · <span class="join-key">┄ Joined table</span> · Purple: prepare input · Orange: missing input · Validation: raw validator defined</div>
     <div class="pytred-workspace">
     <div class="pytred-graph">
       <div class="pytred-canvas" role="img" aria-label="Pipeline dependencies. Use the node selector below for details."></div>

@@ -28,7 +28,7 @@ it does not expand the code inside those operations.
 
 A purple prepare node reads raw inputs and produces the target's prepared
 table. Follow that table's outgoing edges to find the processing methods and
-joins that use it. A **検証あり** badge on a raw input means that it has a
+joins that use it. A **Validation** badge on a raw input means that it has a
 validator defined. Select the input to see each validator's name and full list
 of input names. The badge describes the definition, independently of whether
 validation has run or succeeded.
