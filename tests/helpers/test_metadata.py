@@ -1,5 +1,6 @@
 from datetime import date
 import json
+from pathlib import Path
 from typing import Annotated
 
 import polars as pl
@@ -39,7 +40,8 @@ def test_declared_inputs_and_later_producers_are_distinct():
         def later(self):
             pytest.fail("Inspection must not execute methods")
 
-    tables = get_datahub_metadata(Hub)["tables"]
+    result = get_datahub_metadata(Hub)
+    tables = result["tables"]
     assert sorted(table["name"] for table in tables) == [
         "before",
         "later",
@@ -56,6 +58,18 @@ def test_declared_inputs_and_later_producers_are_distinct():
     assert by_name["undeclared"]["metadata"] is None
     assert by_name["before"]["depends"] == ["later", "undeclared"]
     assert by_name["later"]["order"] == 3
+    lines = Path(__file__).read_text().splitlines()
+    hub_source = result["DataHub"]["source"]
+    assert hub_source["file"] == str(Path(__file__).resolve())
+    assert lines[hub_source["line"] - 1].strip() == "class Hub(DataHub):"
+    for name in ("source", "unused"):
+        location = by_name[name]["source"]
+        assert location["file"] == hub_source["file"]
+        assert lines[location["line"] - 1].strip().startswith(f"{name}: Annotated[")
+    location = by_name["before"]["source"]
+    assert location["file"] == hub_source["file"]
+    assert lines[location["line"] - 1].strip() == "@polars_table(2)"
+    assert by_name["undeclared"]["source"] is None
 
 
 def test_collect_metadata_without_execution(capsys):
@@ -95,6 +109,25 @@ def test_collect_configured_output_metadata():
     assert result["DataHub"]["metadata_status"] == "defined"
     assert result["DataHub"]["metadata"]["updated_on"] == "2026-10-25"
     assert result["tables"] == []
+
+
+def test_dynamic_definitions_without_source_still_return_metadata():
+    namespace: dict = {}
+    exec(compile("def result(self, rows):\n    return rows\n", "<dynamic>", "exec"), namespace)
+    hub = type(
+        "DynamicHub",
+        (DataHub,),
+        {"__module__": __name__, "result": polars_table(0)(namespace["result"])},
+    )
+
+    result = get_datahub_metadata(hub)
+
+    assert result["DataHub"]["source"] is None
+    assert [(table["name"], table["source"]) for table in result["tables"]] == [
+        ("rows", None),
+        ("result", None),
+    ]
+    assert result["tables"][1]["depends"] == ["rows"]
 
 
 @pytest.mark.parametrize("target", [object(), int], ids=["instance", "unrelated_class"])

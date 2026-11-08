@@ -88,6 +88,19 @@ pytred --version
 pytred metadata my_project.pipeline:MyDataHub
 ```
 
+With pytred 1.1+, use `--compact` for a short text outline or `--table NAME` to
+select one input or generated table (the options can be combined):
+
+```bash
+pytred metadata my_project.pipeline:MyDataHub --compact
+pytred metadata my_project.pipeline:MyDataHub --table totals
+```
+
+Compact output includes execution order, dependencies, optional flags and
+`FILE:LINE` source locations, without detailed metadata or method bodies.
+Selecting a table retains the hub entry and dependency names; it does not add
+the dependencies' entries. An unknown table is a usage error (exit code 2).
+
 The same information is available as a JSON-compatible dictionary in Python:
 
 ```python
@@ -102,6 +115,12 @@ The CLI imports the target module, so its top-level code runs normally.
 The result contains `DataHub` and `tables`. Each entry has `metadata_status`:
 `defined` for configured metadata or `unset` for missing metadata. The `metadata`
 field is an object when defined and `null` otherwise in JSON.
+
+Starting in 1.1, each entry also has `source`: an absolute `file` path and a
+one-based `line` at the beginning of the definition, including decorators.
+Declared inputs point to annotations directly in the class body. Inferred
+inputs and definitions without retrievable source files have `source: null`
+(`source unavailable` in compact output).
 
 Each table entry also includes `is_optional`: `true` or `false` for processing
 methods, and `null` for input tables where it does not apply. This describes
