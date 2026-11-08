@@ -130,6 +130,23 @@ def test_dynamic_definitions_without_source_still_return_metadata():
     assert result["tables"][1]["depends"] == ["rows"]
 
 
+def test_nested_class_with_unindented_string_keeps_metadata():
+    class Hub(DataHub):
+        description = """Pipeline description.
+This line intentionally has no indentation.
+        """
+
+        rows: Annotated[pl.DataFrame, Root(metadata=TableMetadata(description="Source"))]
+
+    result = get_datahub_metadata(Hub)
+
+    assert result["DataHub"]["source"]["file"] == str(Path(__file__).resolve())
+    rows = result["tables"][0]
+    assert rows["name"] == "rows"
+    assert rows["metadata"]["description"] == "Source"
+    assert rows["source"] is None
+
+
 @pytest.mark.parametrize("target", [object(), int], ids=["instance", "unrelated_class"])
 def test_reject_non_datahub_target(target):
     with pytest.raises(TypeError, match="DataHub subclass"):

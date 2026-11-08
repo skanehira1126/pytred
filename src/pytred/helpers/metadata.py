@@ -2,6 +2,7 @@ import ast
 import inspect
 from pathlib import Path
 from textwrap import dedent
+from typing import cast
 
 from pytred.data_hub import DataHub
 from pytred.helpers.decorator import get_metadata
@@ -22,12 +23,10 @@ def _source_location(obj) -> dict | None:
 def _input_source_locations(hub_class: type[DataHub], source: dict | None) -> dict:
     if source is None:
         return {}
+    lines, start = inspect.getsourcelines(hub_class)
     try:
-        lines, start = inspect.getsourcelines(hub_class)
-        definition = ast.parse(dedent("".join(lines))).body[0]
-    except (OSError, TypeError, SyntaxError):
-        return {}
-    if not isinstance(definition, ast.ClassDef):
+        definition = cast(ast.ClassDef, ast.parse(dedent("".join(lines))).body[0])
+    except SyntaxError:
         return {}
     return {
         node.target.id: {"file": source["file"], "line": start + node.lineno - 1}
