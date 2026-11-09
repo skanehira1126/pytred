@@ -15,10 +15,13 @@ def table(
     join: str | None = None,
     is_validate_unique: bool = False,
 ) -> Callable:
-    """
+    """Create a table decorator for the selected backend.
+
+    Use `polars_table` for Polars pipelines unless a backend argument is needed.
+
     Parameters
     ----------
-    engine : {"polars"}
+    engine : Literal["polars"]
         The backend engine used for data processing. Currently, only "polars" is supported.
     order : int
         An integer specifying the execution order of the data processing function.

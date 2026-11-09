@@ -1,30 +1,71 @@
-site_name: "Pytred: Python Tools for Refinement and Enhancement of Data"
+site_name: pytred
+site_description: Build, run, and inspect reusable Polars pipelines.
+site_url: https://skanehira1126.github.io/pytred/
+repo_url: https://github.com/skanehira1126/pytred
+repo_name: skanehira1126/pytred
 hooks:
   - docs/hooks/visualization.py
 theme:
-  name: "material"
+  name: material
+  font: false
+  palette:
+    primary: teal
+    accent: teal
+  features:
+    - navigation.sections
+    - navigation.footer
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+    - search.highlight
 nav:
-  - Home: "index.md"
-  - API Reference:
-      - DataHub: "api_reference/data_hub.md"
-      - DataNode: "api_reference/data_node.md"
-      - Input declarations: "api_reference/inputs.md"
-      - Metadata: "api_reference/metadata.md"
-      - decorators: "api_reference/decorators.md"
-  - Tutorials:
-      - Visualization: "tutorials/visualization.md"
+  - Home: index.md
+  - Get started: getting-started.md
+  - User guide:
+      - Build a pipeline: guides/pipelines.md
+      - Explore the graph: tutorials/visualization.md
+      - Describe your data: api_reference/metadata.md
+      - Troubleshoot a run: guides/troubleshooting.md
+      - Example notebooks: examples.md
+  - API reference:
+      - DataHub: api_reference/data_hub.md
+      - DataNode: api_reference/data_node.md
+      - Root and Input: api_reference/inputs.md
+      - Decorators: api_reference/decorators.md
 plugins:
   - search
   - mkdocs-jupyter
   - mkdocstrings:
       default_handler: python
+      custom_templates: docs/templates
       handlers:
         python:
+          paths: [src]
           options:
-            show_source: true
-            docstring_style: "numpy"
+            extensions:
+              - griffe_pydantic
+            show_source: false
+            docstring_style: numpy
+            docstring_section_style: list
+            heading_level: 2
+            show_root_heading: true
+            show_root_full_path: false
+            show_bases: false
+            show_labels: false
+            separate_signature: true
+            line_length: 72
+            show_signature_annotations: true
+            signature_crossrefs: true
+            members_order: source
+extra_css:
+  - stylesheets/extra.css
 markdown_extensions:
   - admonition
+  - attr_list
+  - md_in_html
   - pymdownx.details
   - pymdownx.superfences
-  - codehilite
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - toc:
+      permalink: true

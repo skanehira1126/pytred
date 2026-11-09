@@ -1,0 +1,37 @@
+{% extends "_base/class.html.jinja" %}
+
+{% block contents scoped %}
+  {% block docstring scoped %}{{ super() }}{% endblock %}
+  <div class="metadata-fields" role="region" aria-label="{{ class.name }} fields" tabindex="0">
+    <table>
+      <thead>
+        <tr><th>Field</th><th>Type / default</th><th>Meaning</th></tr>
+      </thead>
+      <tbody>
+        {% for name, field in class.extra.griffe_pydantic.fields().items() %}
+          <tr id="{{ class.path }}.{{ name }}">
+            <td><code>{{ name }}</code></td>
+            <td>
+              <code>{{ field.annotation | e }}</code>
+              <div class="metadata-default">
+                {% set factory = field.extra.griffe_pydantic.constraints.get("default_factory") %}
+                {% if factory is not none %}
+                  Default: <code>{{ factory | e }}()</code>
+                {% elif field.value is not none %}
+                  Default: <code>{{ field.value | e }}</code>
+                {% else %}
+                  <strong>Required</strong>
+                {% endif %}
+              </div>
+            </td>
+            <td>
+              {% if field.docstring %}
+                {{ field.docstring.value | convert_markdown(heading_level + 1, field.path) }}
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

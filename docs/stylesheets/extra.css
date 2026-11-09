@@ -1,0 +1,68 @@
+/* Keep long API signatures scrollable without widening the page. */
+.md-typeset pre > code {
+  max-width: 100%;
+}
+
+.md-typeset h1 {
+  color: var(--md-default-fg-color);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.md-typeset .md-button {
+  margin: 0 0.5rem 0.5rem 0;
+}
+
+.md-typeset .grid.cards > ul > li {
+  border-radius: 0.4rem;
+}
+
+.md-typeset table:not([class]) {
+  font-size: 0.75rem;
+}
+
+.md-typeset .grid.cards {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media screen and (max-width: 40em) {
+  .md-typeset .grid.cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* API names stay short; long call signatures wrap in their own block. */
+.md-typeset .doc-signature code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.md-typeset .doc-heading {
+  margin-top: 2rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--md-default-fg-color--lightest);
+}
+
+.md-typeset .doc-contents:not(.first) {
+  margin-left: 0;
+}
+
+.md-typeset .doc-section-item {
+  margin-bottom: 1rem;
+}
+
+.md-typeset table td:first-child code {
+  white-space: nowrap;
+}
+
+.metadata-fields {
+  overflow-x: auto;
+}
+
+.metadata-fields .metadata-default {
+  margin-top: 0.4rem;
+}
+
+.metadata-fields tr[id] {
+  scroll-margin-top: 4rem;
+}

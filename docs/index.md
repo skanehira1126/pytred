@@ -1,24 +1,62 @@
-# Welcome to Pytred Documentation
+---
+hide:
+  - toc
+---
 
-This documentation describes pytred 1.x. Install the wheel from GitHub Releases
-with Python 3.11–3.14:
+# Build reusable Polars pipelines
 
-```bash
-pip install https://github.com/skanehira1126/pytred/releases/download/1.0.1/pytred-1.0.1-py3-none-any.whl
-```
+pytred connects your Polars transformations into a pipeline you can run,
+inspect, and reuse. Write a method for each intermediate table, name its inputs,
+and choose how its result joins the output.
 
-Define a pipeline as a direct subclass of `DataHub`. Declare the base table
-with `Annotated[pl.DataFrame, Root(metadata=None)]` and other required tables
-with `Input`. Construct the hub without data, then call `hub.execute(...)` with
-the root DataFrame and inputs for that run. A `@polars_table` method can use any
-input or previously computed table by naming it as a parameter.
+[Run your first pipeline](getting-started.md){ .md-button .md-button--primary }
+[Explore the interactive viewer](tutorials/visualization.md#try-the-viewer){ .md-button }
 
-See [input declarations](api_reference/inputs.md) for `Root` and `Input`, and
-[metadata](api_reference/metadata.md) for table and column descriptions.
+## Start with your task
 
-## Examples
+<div class="grid cards" markdown>
 
-1. [basic preprocessing](./examples/01_basic_preprocessing.ipynb)
-1. [Preprocessing with completed data](./examples/02_use_completed_data.ipynb)
-1. [Visualize data preprocessing](./examples/03_visualize_workflow.ipynb)
+- **Create a pipeline**
 
+    Install pytred and turn two small input tables into customer totals.
+
+    [Get started](getting-started.md)
+
+- **Add processing steps and joins**
+
+    Reuse intermediate tables, join precomputed results, and choose which rows to return.
+
+    [Build a pipeline](guides/pipelines.md)
+
+- **Inspect a pipeline**
+
+    Explore dependencies, join keys, and Python source in a notebook or the live demo.
+
+    [Use the viewer](tutorials/visualization.md)
+
+- **Find a missing input or column**
+
+    Check required inputs, skipped steps, join keys, and intermediate results.
+
+    [Troubleshoot a run](guides/troubleshooting.md)
+
+</div>
+
+## How it fits together
+
+A `DataHub` class defines a pipeline. Its `Root` input provides the starting
+rows. Other inputs supply data to methods decorated with `@polars_table`.
+Each method returns a Polars DataFrame; its decorator decides whether to join
+that table to the root or keep it as an intermediate result.
+
+Call `execute(...)` with fresh inputs for each run. Inspect intermediate tables
+with `get(...)`, and use `display(hub)` in a trusted notebook to explore the graph.
+
+## Look up the details
+
+- [Input declarations](api_reference/inputs.md): required tables and root selection.
+- [Table and column metadata](api_reference/metadata.md): describe data and inspect definitions.
+- [API reference](api_reference/data_hub.md): signatures, parameters, and return values.
+- [Example notebooks](examples.md): longer workflows to run and adapt.
+
+These guides target pytred 1.x on Python 3.11–3.14.

@@ -78,34 +78,38 @@ def polars_table(
     is_optional: bool = False,
     metadata: TableMetadata | None = None,
 ):
-    """
-    Decorator class for adding metadata to data processing functions, specifying their order of
-    execution, join method, and uniqueness constraints on keys.
+    """Turn a method returning a Polars DataFrame into a pipeline step.
+
+    Method parameter names identify input tables or earlier step results.
 
     Parameters
     ----------
     order : int
-        The order in which the decorated function should be executed in the data pipeline.
-    keys : tuple
-        The keys to be used for joining data tables. If keys are provided, the decorator will check
-        for their presence in the DataFrame returned by the function.
-    join : PolarsJoinMethod, optional
-        The Polars join strategy. Use 'full' for a full outer join.
-        If join is None, it implies that the resulting table from this function is intended for use
-        only within preprocessing steps and will not be directly included in the final output of
-        the DataHub pipeline.
+        Non-negative execution order. Producers must run before their consumers.
+    keys : str
+        Join column names returned by the method. Omit keys for `join=None`
+        and `join="cross"`; other joins require at least one key.
+    join : PolarsJoinMethod or None, optional
+        Join strategy for adding the result to the root. `None` keeps it as an
+        intermediate table. Use `"full"` for a full outer join.
     is_validate_unique : bool, default True
-        Whether to validate the uniqueness of the specified keys in the DataFrame returned by the
-        function. If True, a check for duplicate entries based on the keys is performed.
-    is_optional: bool, default False
-        If True, do not execute if input table does not exist
-    metadata: TableMetadata, optional
-        Metadata of output Table
+        Check that the returned join keys uniquely identify rows.
+    is_optional : bool, default False
+        Skip this step if a dependency is missing or was skipped. Declared
+        `Input` tables are still required on every run.
+    metadata : TableMetadata or None, optional
+        Description of the produced table; does not validate its contents.
+
+    Returns
+    -------
+    Callable
+        Decorator for a method returning a Polars DataFrame.
 
     Raises
     ------
     ValueError
-        If the 'order' parameter is not an integer.
+        The order is not a non-negative integer, the join strategy is unknown,
+        or the keys are incompatible with the join strategy.
     """
     _validate_signature(order, keys, join)
 

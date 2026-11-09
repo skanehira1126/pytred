@@ -561,7 +561,10 @@ class DataHub:
 
     def post_step(self, df: pl.DataFrame) -> pl.DataFrame:
         """
-        Performs any final processing on the joined DataFrame.
+        Transform the joined DataFrame before the final execute() filter.
+
+        Override this method to add final processing. The default implementation
+        returns the DataFrame unchanged.
 
         Parameters
         ----------
@@ -578,9 +581,21 @@ class DataHub:
     def get(self, table_name: str) -> DataNode | EmptyDataNode:
         """Look up an input or intermediate table from the current run by name.
 
-        Returns a DataNode for a registered DataFrame or an EmptyDataNode for
-        a skipped optional step. Raises KeyError if the name has not been
-        registered in this run, including before the first execution.
+        Parameters
+        ----------
+        table_name : str
+            Input name or decorated processing method name.
+
+        Returns
+        -------
+        DataNode or EmptyDataNode
+            Registered table, or a placeholder for a skipped optional step.
+
+        Raises
+        ------
+        KeyError
+            The name is not registered in this run, including before the first
+            execution.
         """
         try:
             return self.tables[table_name]

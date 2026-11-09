@@ -1,4 +1,18 @@
-# Interactive pipeline visualization
+# Explore the pipeline graph
+
+Inspect dependencies, join keys, and step source without running transformations.
+
+## Try the viewer
+
+Select a node to inspect its inputs and join settings. Hover over `combined`
+to preview its Python source, or change **Direction** to compare layouts.
+On narrow screens, scroll horizontally inside the viewer to reach the controls
+and inspector on the right.
+
+<!-- pytred-interactive-demo -->
+
+## Display your own pipeline
+
 
 In a notebook with trusted HTML and JavaScript support, display a DataHub instance:
 
@@ -8,6 +22,8 @@ from IPython.display import display
 
 display(hub)
 ```
+
+## Read the graph
 
 Each display is an independent snapshot. Before execution it shows declared
 inputs and their metadata, input hooks, processing methods and dependencies.
@@ -33,12 +49,16 @@ validator defined. Select the input to see each validator's name and full list
 of input names. The badge describes the definition, independently of whether
 validation has run or succeeded.
 
+## Navigate and inspect
+
 Scroll to zoom, drag the background to pan, or drag individual nodes. Select a
 node on the graph or in the **Inspect** menu to highlight its upstream and
 downstream dependencies and show its docstring and join metadata in the right panel. **Fit** frames
 the graph and **Reset** restores automatic placement. **Direction** switches
 between top-to-bottom and left-to-right placement of the base path. Left-to-right
 is the default. Scroll horizontally in narrow notebook outputs to reach the inspector.
+
+## Read step source
 
 Hover over a prepare or processing step to preview its Python implementation. Select the
 node (or choose it in **Inspect**) to read, scroll, and select syntax-highlighted Python source in
@@ -50,6 +70,8 @@ Decorated functions are unwrapped to show the original implementation. When
 Python cannot retrieve source, such as for some dynamically created functions or
 notebook cells, the panel shows the function name and available docstring instead.
 The HTML snapshot includes this source code, including when saved or exported.
+
+## Choose the initial direction
 
 For a displayable HTML snapshot with a vertical initial layout:
 
@@ -77,15 +99,4 @@ interactive graph. Trust and rerun the notebook when appropriate. Exported HTML
 can retain the graph if the exporter preserves the iframe; Markdown and GitHub's
 notebook preview do not provide this interactive display.
 
-The previous Mermaid renderer, image-export helper, and `pytred report` CLI
-have been removed. Report and image export are not provided by this version.
-
-## Try the viewer
-
-This sample uses the same HTML snapshot as the notebook viewer and works on
-GitHub Pages without a Python server. Hover over `combined`, click a join to
-inspect its keys, or change direction. The sample is generated from
-`docs/demos/viewer_sample.py` when the documentation is built. The demo executes a small pipeline during the build to register its sample
-inputs. The viewer displays its structure and join settings.
-
-<!-- pytred-interactive-demo -->
+Report and image export are not provided by this version.

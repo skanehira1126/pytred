@@ -1,13 +1,19 @@
+# DataHub
+
+Define a pipeline, execute it with fresh inputs, and inspect intermediate tables.
+For a complete example, see [Get started](../getting-started.md).
+
 ::: pytred.data_hub.DataHub
+    options:
+      members:
+        - execute
+        - get
+        - root_df
+        - get_root_table_name
+        - get_input_table_names
+        - post_step
 
-## Visualization
+## Notebook display
 
-`DataHub` owns table registration, dependency inspection, and pipeline execution.
-Notebook visualization is implemented in `pytred.helpers.visualize` using
-Cytoscape.js and Dagre. `display(hub)` delegates through `_repr_html_()` without
-executing the pipeline. Each output is an independent HTML snapshot with
-browser-only interaction; no Python widget state or comm is created.
-
-For a displayable snapshot, use `visualize_datahub(hub, direction="LR")` from
-`pytred.helpers.visualize`. See the [visualization tutorial](../tutorials/visualization.md)
-for controls and display requirements.
+Use `display(hub)` to inspect a snapshot without executing the pipeline.
+See [Explore the graph](../tutorials/visualization.md) for controls and display requirements.

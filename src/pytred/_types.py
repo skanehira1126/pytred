@@ -35,6 +35,7 @@ class Input(BaseModel):
     """
 
     metadata: TableMetadata | None
+    """Table description. Pass `None` explicitly when no description is needed."""
 
 
 class Root(Input):

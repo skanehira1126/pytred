@@ -42,10 +42,10 @@ Undeclared named DataFrames can also be supplied as dependencies. Leave a name
 undeclared if it should be absent on some runs; `Input` always makes it required,
 even when only an optional processing method uses it.
 
-## Root
-
 ::: pytred._types.Root
-
-## Input
+    options:
+      members: false
 
 ::: pytred._types.Input
+    options:
+      members: false

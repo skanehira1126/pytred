@@ -37,28 +37,10 @@ target module. Missing metadata is returned as `metadata_status: "unset"` and
 `metadata: null` in JSON. A supplied `DataNode` retains its own runtime metadata,
 which can differ from the class declaration.
 
-## TableMetadata
+<span id="tablemetadata"></span>
 
 ::: pytred.metadata.TableMetadata
-    options:
-      members:
-        - description
-        - roles
-        - grain
-        - primary_key
-        - columns
-        - updated_on
 
-## ColumnMetadata
+<span id="columnmetadata"></span>
 
 ::: pytred.metadata.ColumnMetadata
-    options:
-      members:
-        - name
-        - description
-        - unit
-        - is_categorical
-        - categories
-        - nullable
-        - null_meaning
-        - updated_on
