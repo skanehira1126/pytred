@@ -7,12 +7,16 @@ specifies its execution order and how to join its output to the root table.
 
 ## Quick start
 
-This guide targets pytred 1.x (Python 3.11–3.14). Install the wheel from
-GitHub Releases in your project's Python environment:
+This guide targets pytred 1.x (Python 3.11–3.14). Install the latest stable release
+in your project's Python environment:
 
 ```bash
-pip install https://github.com/skanehira1126/pytred/releases/download/1.0.1/pytred-1.0.1-py3-none-any.whl
+python -m pip install --upgrade "https://github.com/skanehira1126/pytred/archive/refs/tags/latest.zip"
 ```
+
+The `latest` tag tracks the latest stable Python package release. pip builds the
+package from its source archive; Git is not required. For reproducible environments,
+replace `latest` in the URL with a version tag, such as `1.0.1`.
 
 For development, run `pip install -e .` from the repository root.
 

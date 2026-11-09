@@ -5,11 +5,15 @@ every customer and adds their total order amount.
 
 ## 1. Install pytred
 
-Use Python 3.11–3.14. In your project's Python environment, install the release wheel:
+Use Python 3.11–3.14. In your project's Python environment, install the latest stable release:
 
 ```bash
-python -m pip install https://github.com/skanehira1126/pytred/releases/download/1.0.1/pytred-1.0.1-py3-none-any.whl
+python -m pip install --upgrade "https://github.com/skanehira1126/pytred/archive/refs/tags/latest.zip"
 ```
+
+The `latest` tag tracks the latest stable Python package release. pip builds the
+package from its source archive; Git is not required. For reproducible environments,
+replace `latest` in the URL with a version tag, such as `1.0.1`.
 
 ## 2. Define and run the pipeline
 
