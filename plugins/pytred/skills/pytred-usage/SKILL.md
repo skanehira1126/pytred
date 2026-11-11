@@ -1,6 +1,6 @@
 ---
 name: pytred-usage
-description: Build, explain, or debug pytred pipelines with DataHub, DataNode, and @polars_table, including metadata definition and inspection via CLI and notebook visualization. Excludes generic Polars work without pytred and Codex plugin installation.
+description: Build, explain, or debug pytred pipelines with DataHub, DataNode, and @polars_table, including input validation/preparation, metadata definition and inspection via CLI and notebook visualization. Excludes generic Polars work without pytred and Codex plugin installation.
 ---
 
 # Pytred Usage
@@ -14,6 +14,8 @@ Read only the relevant guidance below. Section names refer to the bundled [usage
 | Request | Sections to read |
 | --- | --- |
 | Build or modify preprocessing | Core Model; Build a Reusable Pipeline Class |
+| Configure table decorators, optional steps, or key validation | [Decorators: Table methods](references/decorators.md#table-methods) |
+| Validate or prepare raw inputs | [Decorators: Validate and prepare inputs](references/decorators.md#validate-and-prepare-inputs) |
 | Join already computed tables | Core Model; Compose Existing Tables with DataNode |
 | Explain missing columns, skipped steps, or errors | Core Model; Inspect and Debug |
 | Explain post_step or output filters | Core Model |
@@ -26,7 +28,7 @@ Identify the root, required inputs and output join keys before writing a pipelin
 ## Use the right evidence
 
 - For a usage question, start with the guide and the user's code. The plugin supplies instructions, not the Python package or the pytred source repository.
-- This guide targets pytred 1.x, with `Root` and `Input` in `pytred._types`. Before executing a pipeline, check the installed version in the project's Python environment. For another version, inspect its API before adapting these examples.
+- This guide targets pytred 1.x, with `Root` and `Input` in `pytred._types`. Before executing a pipeline or CLI command, check the installed version in the project's Python environment. For another version, inspect its API before adapting these examples.
 - The guide's Source Map lists optional checkout references. Do not assume those files exist in the user's project, or require a checkout to use the bundled guide.
 - Infer input schemas and join keys from supplied code or data. If a missing choice would change the resulting rows or columns, ask a focused question; otherwise make the assumption explicit and continue.
 

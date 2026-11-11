@@ -131,12 +131,10 @@ input nodes in the viewer use the class declarations. See the [CLI guide](cli-gu
 - For a missing required input error, compare the supplied names with all
   `Root` and `Input` declarations, including names supplied by DataNodes.
 - For a missing method dependency, check the spelling and the producer's order.
-  `is_optional=True` skips a step when a dependency is missing or was skipped.
-  To make a lookup genuinely optional, accept it as an additional runtime input
-  and leave it out of the required declarations.
-- Return a Polars DataFrame from each table method. For keyed joins, return
-  all join keys and check uniqueness (enabled by default). Omit keys for
-  `cross` and `None`. Check the installed Polars for supported join strategies.
+  For optional-step behavior, return types, join keys, and uniqueness checks,
+  read [Table methods](decorators.md#table-methods).
+- For input validation or preparation failures, inspect the raw inputs with
+  `hub.get(name).table` and read [Validate and prepare inputs](decorators.md#validate-and-prepare-inputs).
 
 ## Notebook Visualization
 
