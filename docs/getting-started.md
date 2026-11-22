@@ -58,7 +58,7 @@ parameter in `totals` receives the input with that name. The decorator runs the
 method at order `0` and left-joins its result on `id`. Customer 2 has no orders,
 so its total is null.
 
-Declare the pipeline as a direct subclass of `DataHub`. Supply the root by
+Declare the pipeline as a subclass of `DataHub`. Supply the root by
 keyword and every declared `Input` on each call to `execute()`. Use
 `metadata=None` when you do not need a table description.
 

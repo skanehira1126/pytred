@@ -270,13 +270,71 @@ def test_read_output_metadata_without_instantiation():
     class MetadataHub(DataHub, metadata=metadata):
         pass
 
+    class Inherited(MetadataHub):
+        pass
+
+    class Cleared(MetadataHub, metadata=None):
+        pass
+
+    class Grandchild(Cleared):
+        pass
+
+    replacement = TableMetadata(description="Derived output")
+
+    class Replaced(MetadataHub, metadata=replacement):
+        pass
+
     assert MetadataHub.metadata is metadata
+    assert Inherited.metadata is metadata
+    assert Cleared.metadata is None
+    assert Grandchild.metadata is None
+    assert Replaced.metadata is replacement
 
 
-def test_reject_multilevel_inheritance():
-    with pytest.raises(TypeError, match="RowsHub"):
+def test_subclass_appends_tables_after_each_parent():
+    class Base(RowsHub):
+        @polars_table(10, "id", join="left")
+        def base_values(self, rows):
+            return rows.select("id", first=pl.col("id"))
 
-        class Child(RowsHub):
+    class Child(Base):
+        @polars_table(0, "id", join="left")
+        def child_values(self, base_values):
+            return base_values.select("id", second=pl.col("first") + 1)
+
+    class Grandchild(Child):
+        @polars_table(0, "id", join="left")
+        def last_values(self, child_values):
+            return child_values.select("id", third=pl.col("second") + 1)
+
+    rows = pl.DataFrame({"id": [1]})
+    assert_frame_equal(
+        Grandchild().execute(rows=rows),
+        rows.with_columns(first=1, second=2, third=3).cast(pl.Int64),
+    )
+    assert Base().execute(rows=rows).columns == ["id", "first"]
+
+
+@pytest.mark.parametrize("decorated", [False, True])
+def test_reject_shadowing_inherited_table(decorated):
+    class Parent(DataHub):
+        @polars_table(0)
+        def features(self):
+            return pl.DataFrame()
+
+    def replacement(self):
+        return pl.DataFrame()
+
+    with pytest.raises(ValueError, match="inherited pipeline method 'features'"):
+
+        class Child(Parent):
+            features = polars_table(1)(replacement) if decorated else replacement
+
+
+def test_reject_multiple_hub_parents():
+    with pytest.raises(TypeError, match="single DataHub parent"):
+
+        class Child(BranchingHub, RowsHub):
             pass
 
 

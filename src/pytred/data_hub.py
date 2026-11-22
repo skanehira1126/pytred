@@ -36,10 +36,17 @@ PrepareFunctions = dict[str, str]
 ValidateFunctions = list[str]
 
 
+class _Unset:
+    pass
+
+
+_UNSET = _Unset()
+
+
 class DataHub:
     """Run an ordered pipeline of Polars tables and join its results to a root DataFrame.
 
-    Define a pipeline as a direct subclass of DataHub. Mark one required input
+    Define a pipeline by subclassing DataHub or an existing hub. Mark one required input
     with ``Annotated[pl.DataFrame, Root(...)]`` to select the base for joins.
     Mark other required inputs with ``Input(...)``. Each decorated method receives
     tables by parameter name and runs in the order set by its ``@polars_table``
@@ -84,25 +91,20 @@ class DataHub:
     def __init_subclass__(
         cls,
         *,
-        metadata: TableMetadata | None = None,
+        metadata: TableMetadata | None | _Unset = _UNSET,
         **kwargs,
     ):
         """Collect this pipeline's input declarations and decorated table methods.
 
-        Raises TypeError for a subclass of a user-defined hub and ValueError
+        Raises TypeError for multiple DataHub parents and ValueError
         for multiple input markers on one field, multiple root fields,
         input names conflicting with processing methods, or multiple prepare
         hooks targeting one input.
         """
         super().__init_subclass__(**kwargs)
-        for base in cls.__bases__:
-            if base is not DataHub and issubclass(base, DataHub):
-                raise TypeError(
-                    f"{cls.__name__} cannot inherit from {base.__name__}. "
-                    "Inherit directly from DataHub."
-                )
-
-        cls.metadata = metadata
+        parent = cls._validate_table_inheritance()
+        if not isinstance(metadata, _Unset):
+            cls.metadata = metadata
 
         hints = get_type_hints(cls, include_extras=True)
 
@@ -149,9 +151,32 @@ class DataHub:
 
         cls.table_join_info.update(table_join_info)
         cls.table_join_keys.update(table_join_keys)
-        cls.registered_tables_order.update(table_order)
+        inherited = parent.registered_tables_order
+        offset = max(inherited.values(), default=-1) + 1
+        cls.registered_tables_order.update(inherited)
+        cls.registered_tables_order.update(
+            {name: offset + order for name, order in table_order.items() if name not in inherited}
+        )
         cls.prepare_functions = prepare_functions
         cls.validate_functions = validate_functions
+
+    @classmethod
+    def _validate_table_inheritance(cls) -> type[DataHub]:
+        parents = [base for base in cls.__bases__ if issubclass(base, DataHub)]
+        if len(parents) != 1:
+            raise TypeError(f"{cls.__name__} must have a single DataHub parent.")
+        parent = parents[0]
+        inherited_methods = (
+            *parent.registered_tables_order,
+            *getattr(parent, "validate_functions", ()),
+            *getattr(parent, "prepare_functions", {}).values(),
+        )
+        for name in inherited_methods:
+            if name in cls.__dict__ or inspect.getattr_static(
+                cls, name
+            ) is not inspect.getattr_static(parent, name):
+                raise ValueError(f"{cls.__name__} redefines inherited pipeline method {name!r}.")
+        return parent
 
     @property
     def root_df(self):

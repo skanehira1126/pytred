@@ -109,6 +109,14 @@ or was skipped. An `Input` declaration still requires that table on every run.
 For a dependency that may be absent, leave it undeclared and supply it as an
 additional named DataFrame only when available.
 
+## Extend a pipeline
+
+Subclass a single existing hub to append tables. Give each new table a fresh
+method name. Inherited table methods and input hooks cannot be shadowed.
+Inherited tables run and join first. Within the subclass,
+`@polars_table(order, ...)` orders its own tables, so numbering can restart at
+zero. The final joins are followed by one call to `post_step()`.
+
 ## Combine pipelines
 
 Construct a child hub and call its `execute()` inside a parent processing method.

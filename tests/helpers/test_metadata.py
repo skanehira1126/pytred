@@ -1,5 +1,6 @@
 from datetime import date
 import json
+from pathlib import Path
 from typing import Annotated
 
 import polars as pl
@@ -39,7 +40,8 @@ def test_declared_inputs_and_later_producers_are_distinct():
         def later(self):
             pytest.fail("Inspection must not execute methods")
 
-    tables = get_datahub_metadata(Hub)["tables"]
+    result = get_datahub_metadata(Hub)
+    tables = result["tables"]
     assert sorted(table["name"] for table in tables) == [
         "before",
         "later",
@@ -56,6 +58,18 @@ def test_declared_inputs_and_later_producers_are_distinct():
     assert by_name["undeclared"]["metadata"] is None
     assert by_name["before"]["depends"] == ["later", "undeclared"]
     assert by_name["later"]["order"] == 3
+    lines = Path(__file__).read_text().splitlines()
+    hub_source = result["DataHub"]["source"]
+    assert hub_source["file"] == str(Path(__file__).resolve())
+    assert lines[hub_source["line"] - 1].strip() == "class Hub(DataHub):"
+    for name in ("source", "unused"):
+        location = by_name[name]["source"]
+        assert location["file"] == hub_source["file"]
+        assert lines[location["line"] - 1].strip().startswith(f"{name}: Annotated[")
+    location = by_name["before"]["source"]
+    assert location["file"] == hub_source["file"]
+    assert lines[location["line"] - 1].strip() == "@polars_table(2)"
+    assert by_name["undeclared"]["source"] is None
 
 
 def test_collect_metadata_without_execution(capsys):
@@ -97,7 +111,62 @@ def test_collect_configured_output_metadata():
     assert result["tables"] == []
 
 
+def test_dynamic_definitions_without_source_still_return_metadata():
+    namespace: dict = {}
+    exec(compile("def result(self, rows):\n    return rows\n", "<dynamic>", "exec"), namespace)
+    hub = type(
+        "DynamicHub",
+        (DataHub,),
+        {
+            "__module__": __name__,
+            "__annotations__": {"rows": Annotated[pl.DataFrame, Root(metadata=None)]},
+            "result": polars_table(0)(namespace["result"]),
+        },
+    )
+
+    result = get_datahub_metadata(hub)
+
+    assert result["DataHub"]["source"] is None
+    assert [(table["name"], table["source"]) for table in result["tables"]] == [
+        ("rows", None),
+        ("result", None),
+    ]
+    assert result["tables"][1]["depends"] == ["rows"]
+
+
+def test_nested_class_with_unindented_string_keeps_metadata():
+    class Hub(DataHub):
+        description = """Pipeline description.
+This line intentionally has no indentation.
+        """
+
+        rows: Annotated[pl.DataFrame, Root(metadata=TableMetadata(description="Source"))]
+
+    result = get_datahub_metadata(Hub)
+
+    assert result["DataHub"]["source"]["file"] == str(Path(__file__).resolve())
+    rows = result["tables"][0]
+    assert rows["name"] == "rows"
+    assert rows["metadata"]["description"] == "Source"
+    assert rows["source"] is None
+
+
 @pytest.mark.parametrize("target", [object(), int], ids=["instance", "unrelated_class"])
 def test_reject_non_datahub_target(target):
     with pytest.raises(TypeError, match="DataHub subclass"):
         get_datahub_metadata(target)
+
+
+def test_inherited_input_locations_point_to_declaring_class():
+    class Parent(DataHub):
+        rows: Annotated[pl.DataFrame, Root(metadata=None)]
+        other: Annotated[pl.DataFrame, Input(metadata=None)]
+
+    class Child(Parent):
+        other: Annotated[pl.DataFrame, Input(metadata=TableMetadata(description="Child input"))]
+
+    tables = get_datahub_metadata(Child)["tables"]
+    lines = Path(__file__).read_text().splitlines()
+    locations = {t["name"]: lines[t["source"]["line"] - 1].strip() for t in tables}
+    assert locations["rows"].startswith("rows: Annotated[")
+    assert 'description="Child input"' in locations["other"]

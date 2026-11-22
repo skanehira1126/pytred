@@ -2,7 +2,7 @@
 
 ## Core Model
 
-Define each pipeline as a direct subclass of `DataHub`. Construct the hub
+Define each pipeline as a subclass of `DataHub`. Construct the hub
 without input tables. Call `hub.execute(...)` or `hub(...)` with the tables
 for that run.
 
@@ -13,8 +13,12 @@ for that run.
   become dependencies with `join=None`. Positional DataNodes carry their own
   names, keys and join strategies.
 - A method decorated with `@polars_table` produces one table named after the
-  method. Its parameter names refer to inputs or earlier results. Set producers'
-  order lower than their consumers' order; methods execute in ascending order.
+  method. Its parameter names refer to inputs or earlier results. Within a class, give producers a lower
+  order than their consumers.
+- To extend an existing hub, subclass one hub and give each added table a fresh
+  method name. Inherited tables execute and join first, so the subclass can
+  restart its order at zero and read inherited intermediate tables. Hub inheritance
+  requires pytred 1.1.0 or later.
 - A non-None join adds the table to the root. A table with `join=None` stays
   available for later methods. The optional `filter=pl.Expr` runs after the joins
   and `post_step()`.
@@ -109,7 +113,10 @@ from pytred.helpers.metadata import get_datahub_metadata
 from pytred.metadata import ColumnMetadata, TableMetadata
 
 
-class Scores(DataHub, metadata=TableMetadata(description="Scored orders")):
+scores_metadata = TableMetadata(description="Scored orders")
+
+
+class Scores(DataHub, metadata=scores_metadata):
     orders: Annotated[pl.DataFrame, Root(metadata=TableMetadata(primary_key=("id",)))]
 
     @polars_table(0, "id", join="left", metadata=TableMetadata(
@@ -122,6 +129,28 @@ class Scores(DataHub, metadata=TableMetadata(description="Scored orders")):
 definitions = get_datahub_metadata(Scores)
 ```
 
+A subclass inherits the final output metadata when it omits the class keyword.
+Pass `metadata=None` to clear it or supply a new definition to replace it.
+To describe an additional output column, derive a definition explicitly:
+
+```python
+from datetime import date
+
+
+class RankedScores(Scores, metadata=scores_metadata.update(
+    updated_on=date(2026, 11, 22),
+    columns=(ColumnMetadata(name="rank", description="Descending score rank"),),
+)):
+    @polars_table(0, "id", join="left")
+    def ranks(self, scores):
+        return scores.select("id", rank=pl.col("score").rank(descending=True))
+```
+
+`TableMetadata.update()` (pytred 1.1.0+) requires an update date and returns a new definition.
+It appends columns in order and rejects duplicate names. Supplied `description`,
+`roles`, `grain`, and `primary_key` replace their previous values. Omitted fields
+keep theirs.
+
 Metadata describes tables and columns independently of the values supplied at
 runtime. A supplied DataNode retains its own metadata. CLI inspection and the
 input nodes in the viewer use the class declarations. See the [CLI guide](cli-guide.md).
@@ -131,12 +160,10 @@ input nodes in the viewer use the class declarations. See the [CLI guide](cli-gu
 - For a missing required input error, compare the supplied names with all
   `Root` and `Input` declarations, including names supplied by DataNodes.
 - For a missing method dependency, check the spelling and the producer's order.
-  `is_optional=True` skips a step when a dependency is missing or was skipped.
-  To make a lookup genuinely optional, accept it as an additional runtime input
-  and leave it out of the required declarations.
-- Return a Polars DataFrame from each table method. For keyed joins, return
-  all join keys and check uniqueness (enabled by default). Omit keys for
-  `cross` and `None`. Check the installed Polars for supported join strategies.
+  For optional-step behavior, return types, join keys, and uniqueness checks,
+  read [Table methods](decorators.md#table-methods).
+- For input validation or preparation failures, inspect the raw inputs with
+  `hub.get(name).table` and read [Validate and prepare inputs](decorators.md#validate-and-prepare-inputs).
 
 ## Notebook Visualization
 

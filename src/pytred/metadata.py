@@ -1,11 +1,14 @@
 import datetime
 from typing import Generic
+from typing import Self
+from typing import TypedDict
 from typing import TypeVar
 
 from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
 from pydantic import field_validator
+from typing_extensions import Unpack
 
 
 RoleT = TypeVar("RoleT", bound=str)
@@ -43,6 +46,13 @@ class ColumnMetadata(BaseModel):
     )
 
 
+class _TableOverrides(TypedDict, Generic[RoleT], total=False):
+    description: str | None
+    roles: tuple[RoleT, ...]
+    grain: str | None
+    primary_key: tuple[str, ...]
+
+
 class TableMetadata(BaseModel, Generic[RoleT]):
     """Describe a table without validating its rows or enforcing its keys.
 
@@ -69,6 +79,23 @@ class TableMetadata(BaseModel, Generic[RoleT]):
         default=None,
         description="Date the metadata was last updated",
     )
+
+    def update(
+        self,
+        *,
+        updated_on: datetime.date,
+        columns: tuple[ColumnMetadata, ...] = (),
+        **overrides: Unpack[_TableOverrides[RoleT]],
+    ) -> Self:
+        """Return a validated definition with appended columns and the supplied replacements."""
+        if updated_on is None:
+            raise ValueError("updated_on requires a date.")
+        fields = {name: getattr(self, name) for name in type(self).model_fields}
+        fields.update(overrides)
+        fields["updated_on"] = updated_on
+        if columns != ():
+            fields["columns"] = self.columns + columns
+        return type(self).model_validate(fields, by_name=True)
 
     @field_validator("columns", mode="after")
     @classmethod
