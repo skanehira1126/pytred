@@ -55,8 +55,8 @@ def get_datahub_metadata(hub_class: type[DataHub]) -> dict:
             break
         declared = remaining.intersection(inspect.get_annotations(owner))
         if declared:
-            source = hub_source if owner is hub_class else _source_location(owner)
-            locations = _input_source_locations(owner, source)
+            owner_source = hub_source if owner is hub_class else _source_location(owner)
+            locations = _input_source_locations(owner, owner_source)
             input_sources.update({name: locations.get(name) for name in declared})
             remaining.difference_update(declared)
 
