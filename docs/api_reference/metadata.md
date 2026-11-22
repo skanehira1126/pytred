@@ -24,6 +24,24 @@ Attach a `TableMetadata` instance to `Root(metadata=...)` or `Input(metadata=...
 for a declared input, to `@polars_table(..., metadata=...)` for a processing
 result, or to `class Orders(DataHub, metadata=...):` for the final output.
 
+A subclass inherits the output metadata when it omits the class keyword.
+Pass `metadata=None` to clear it or pass a new `TableMetadata` to replace the
+whole output description for the subclass.
+
+Use `update()` to derive an output definition. Each update requires a date,
+appends new column definitions in order, and replaces the other supplied fields.
+Omitted fields keep their values. A repeated column name raises a validation error.
+
+```python
+from datetime import date
+
+paid_orders_metadata = orders_metadata.update(
+    updated_on=date(2026, 11, 22),
+    description="Orders with payment status",
+    columns=(ColumnMetadata(name="is_paid"),),
+)
+```
+
 Both models reject unknown fields and incompatible value types and prevent
 field reassignment after construction. Use tuples for `roles`, `primary_key`,
 `columns`, and `categories`; use `datetime.date` for `updated_on`. Duplicate

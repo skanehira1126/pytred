@@ -14,6 +14,7 @@ Read only the relevant guidance below. Section names refer to the bundled [usage
 | Request | Sections to read |
 | --- | --- |
 | Build or modify preprocessing | Core Model; Build a Reusable Pipeline Class |
+| Extend an existing hub with additional tables | Core Model; Define Table Metadata |
 | Join already computed tables | Core Model; Compose Existing Tables with DataNode |
 | Explain missing columns, skipped steps, or errors | Core Model; Inspect and Debug |
 | Explain post_step or output filters | Core Model |

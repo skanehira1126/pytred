@@ -171,3 +171,17 @@ def test_missing_hook_dependency_identifies_method_and_input(hook):
         Hub().execute(rows=pl.DataFrame())
     assert "Hub.check_catalog" in str(error.value)
     assert "lookup" in str(error.value)
+
+
+@pytest.mark.parametrize("hook", [prepare_input("rows"), validate_raw_inputs])
+def test_subclass_cannot_hide_parent_input_hook(hook):
+    class Parent(DataHub):
+        @hook
+        def check_rows(self, rows):
+            return rows
+
+    with pytest.raises(ValueError, match="inherited pipeline method 'check_rows'"):
+
+        class Child(Parent):
+            def check_rows(self, rows):
+                return rows

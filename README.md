@@ -1,7 +1,7 @@
 # pytred
 Python Tools for Refinement and Enhancement of Data
 
-Define a Polars pipeline as a direct subclass of `DataHub`. Each decorated method
+Define a Polars pipeline as a subclass of `DataHub`. Each decorated method
 produces a table. Method arguments name its dependencies, and the decorator
 specifies its execution order and how to join its output to the root table.
 

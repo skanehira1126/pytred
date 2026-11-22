@@ -1,5 +1,7 @@
+from datetime import date
 from typing import Literal
 
+from pydantic import Field
 from pydantic import ValidationError
 import pytest
 
@@ -91,3 +93,51 @@ def test_reject_metadata_assignment(metadata):
 
     assert exc_info.value.errors()[0]["type"] == "frozen_instance"
     assert metadata.description is None
+
+
+def test_update_metadata_appends_columns_and_replaces_supplied_fields():
+    original = TableMetadata[Literal["feature", "label"]](
+        grain="ticket",
+        roles=("feature",),
+        primary_key=("id",),
+        description="Odds",
+        columns=(ColumnMetadata(name="id"),),
+    )
+    hit = ColumnMetadata(name="hit")
+    updated = original.update(
+        updated_on=date(2026, 11, 22),
+        roles=("label",),
+        primary_key=(),
+        description=None,
+        columns=(hit,),
+    )
+    assert updated.columns == (*original.columns, hit)
+    assert updated.roles == ("label",)
+    assert updated.primary_key == ()
+    assert updated.description is None
+    assert updated.grain == "ticket"
+    assert updated.updated_on == date(2026, 11, 22)
+    assert original.columns == (ColumnMetadata(name="id"),)
+    assert original.updated_on is None
+    with pytest.raises(ValidationError, match="Duplicate column name"):
+        updated.update(updated_on=date.today(), columns=(hit,))
+    with pytest.raises(ValidationError, match="roles"):
+        updated.update(updated_on=date.today(), roles=("unknown",))
+
+
+def test_update_requires_date():
+    with pytest.raises(TypeError, match="updated_on"):
+        TableMetadata().update()
+    with pytest.raises(ValueError, match="updated_on"):
+        TableMetadata().update(updated_on=None)
+
+
+def test_update_preserves_generated_defaults_on_metadata_subclasses():
+    revisions = iter((1, 2))
+
+    class VersionedMetadata(TableMetadata):
+        revision: int = Field(default_factory=lambda: next(revisions))
+
+    original = VersionedMetadata()
+    updated = original.update(updated_on=date.today())
+    assert updated.revision == original.revision
