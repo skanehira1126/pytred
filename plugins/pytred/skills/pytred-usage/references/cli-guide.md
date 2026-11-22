@@ -6,6 +6,7 @@ does not install the Python package. Replace the target with an importable
 
 ```bash
 pytred --version
+pytred metadata --help
 pytred metadata my_project.pipeline:MyDataHub
 ```
 
@@ -44,11 +45,28 @@ names produce an error on stderr with exit code 2 and no stdout.
 JSON and the Python dictionary also include `source` on the hub and each table:
 `{"file": "/absolute/path/pipeline.py", "line": 12}`. Lines are one-based and
 start at the first decorator, if present. Declared inputs point to their
-annotation directly in the class body. Inferred inputs and definitions without
+annotation in the class that declared the input, including inherited inputs. Inferred inputs and definitions without
 retrievable source files have `source: null`.
 
 For pytred 1.0, use the default JSON command above; the inspection options and
 source locations require 1.1 or later.
+
+## Inspection boundaries
+
+The output describes class definitions, not a completed run. It does not include
+join strategies, join keys, validator or prepare-hook definitions, or dependencies
+used only by those hooks. Read the source at the reported locations, or use the
+[notebook viewer](usage-guide.md#notebook-visualization) to inspect hooks and joins.
+`--table` accepts input and generated table names, not hook method names.
+
+Tables are sorted by `(order, name)` in the report. For equal orders this is a
+presentation order, not a promise about execution order.
+
+Run the CLI in the Python environment containing both pytred and the target
+project. If the target cannot be imported, check the module path and project
+installation in that environment. The target must resolve to a DataHub class,
+not an instance. Keep module-level print statements out of modules whose CLI
+JSON output will be parsed, because imports execute that code too.
 
 For declaration syntax and its relationship to runtime DataNodes, read
 [Define Table Metadata](usage-guide.md#define-table-metadata).
