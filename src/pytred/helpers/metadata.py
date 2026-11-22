@@ -51,8 +51,6 @@ def get_datahub_metadata(hub_class: type[DataHub]) -> dict:
     input_sources = {}
     remaining = set(hub_class.input_tables)
     for owner in hub_class.__mro__:
-        if not remaining:
-            break
         declared = remaining.intersection(inspect.get_annotations(owner))
         if declared:
             owner_source = hub_source if owner is hub_class else _source_location(owner)

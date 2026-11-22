@@ -117,7 +117,11 @@ def test_dynamic_definitions_without_source_still_return_metadata():
     hub = type(
         "DynamicHub",
         (DataHub,),
-        {"__module__": __name__, "result": polars_table(0)(namespace["result"])},
+        {
+            "__module__": __name__,
+            "__annotations__": {"rows": Annotated[pl.DataFrame, Root(metadata=None)]},
+            "result": polars_table(0)(namespace["result"]),
+        },
     )
 
     result = get_datahub_metadata(hub)

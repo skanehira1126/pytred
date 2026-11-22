@@ -151,3 +151,15 @@ def test_metadata_command_without_target_exits_with_usage_error(monkeypatch, cap
     captured = capsys.readouterr()
     assert captured.out == ""
     assert "target" in captured.err
+
+
+def test_compact_required_step_shows_dependencies_without_optional_marker(monkeypatch, capsys):
+    target = "tests.fixtures.data_hub:BranchingHub"
+    monkeypatch.setattr(
+        sys, "argv", ["pytred", "metadata", target, "--table", "combined", "--compact"]
+    )
+
+    cli()
+
+    _, step = capsys.readouterr().out.splitlines()
+    assert step.split(" @ ")[0] == "1 combined(doubled, offset)"
