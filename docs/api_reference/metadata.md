@@ -55,6 +55,17 @@ target module. Missing metadata is returned as `metadata_status: "unset"` and
 `metadata: null` in JSON. A supplied `DataNode` retains its own runtime metadata,
 which can differ from the class declaration.
 
+In pytred 1.1+, each hub and table entry also includes `source`, with an absolute
+`file` path and a one-based starting `line` (including decorators). Declared
+inputs point to annotations in the class that declares them. Inferred inputs and
+definitions without retrievable source files use `source: null`.
+
+Use `pytred metadata module:DataHubSubclass --compact` for a text outline with
+source locations and no detailed metadata. Add `--table NAME` to select one
+input or generated table in either output format. Selection retains the hub
+and dependency names, without including dependency entries. An unknown table
+produces a usage error with exit code 2.
+
 <span id="tablemetadata"></span>
 
 ::: pytred.metadata.TableMetadata
