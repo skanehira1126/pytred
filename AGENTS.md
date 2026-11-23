@@ -29,15 +29,5 @@
 ## スキルの保守
 
 - `pytred-usage` の編集元は `plugins/pytred/skills/pytred-usage/`。`.agents/skills/pytred-usage` と `.codex/skills/pytred-usage` は同じ編集元へのリンクとして扱う。
-- リポジトリ固有の開発・Knowledge Refineryルールはここで管理する。配布スキルは利用先のプロジェクトでも使えるよう、同梱ガイドと利用先のpytred環境を根拠にする。
+- リポジトリ固有の開発ルールはここで管理する。配布スキルは利用先のプロジェクトでも使えるよう、同梱ガイドと利用先のpytred環境を根拠にする。
 - 適用条件は `description`、作業の進め方は `SKILL.md`、APIの詳細と例は `references/` に置き、同じ説明を複数箇所で維持しない。
-
-<!-- knowledge-refinery:agents:start lang=jp -->
-## Knowledge Refinery
-
-- `.refinery.yaml` が `enabled: true` の場合だけ利用する。OFFを検索・記録の依頼だけで再有効化しない。
-- 利用前に `knowledge-refinery project status --target <このrepoの絶対パス> --json` を確認し、`ready`・`enabled`・`vault_match` がすべてtrueの場合だけrepo-scoped toolsを使う。`project_path` には同じ絶対パスを渡す。
-- vault不一致時はKnowledge Refineryの操作を止め、active vaultを報告する。`vault_id` の手編集で回避しない。
-- 開発作業の開始時は [運用手順の「検索と設定」](docs/development/knowledge-refinery.md#検索と設定) に沿ってcurrent project/shared memory、current project experienceの順で検索する。
-- 作業終了前に再利用できる発見があったか確認する。記録・更新・保守を行うときは [運用手順](docs/development/knowledge-refinery.md) の該当節と対応するスキルを読む。
-<!-- knowledge-refinery:agents:end -->
